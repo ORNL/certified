@@ -53,7 +53,7 @@ def main(argv: Optional[List[str]] = None) -> None:
 
     # Write the certificate the client should trust
     ca_cert = os.path.join(cert_dir, "ca_root.pem")
-    ca_key = os.path.join(cert_dir, "ca_root-key.pem")
+    ca_key  = os.path.join(cert_dir, "ca_root.key")
     ca.private_key_pem.write_to_path(path=ca_key)
     ca.cert_pem.write_to_path(path=ca_cert)
     print("Configure your client to use the following file:")

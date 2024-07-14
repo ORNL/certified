@@ -8,7 +8,7 @@ import httpx
 
 # cert = ("path/to/client.pem") # if pem includes private key
 #cert = ("cert.pem")
-cert = ("cert.pem", "cert.key")
+cert = ("client.pem", "client.key")
 #cert = ("path/to/client.pem", "path/to/client.key", "password") # if key is password-protected
 context = httpx.create_ssl_context(cert=cert, verify="ca_root.pem")
 # To setup logging for all generated keys (e.g. session symmetric keys):

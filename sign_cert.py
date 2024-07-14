@@ -20,10 +20,14 @@ def main(argv : Optional[List[str]] = None) -> None:
 
     parser = argparse.ArgumentParser(prog="sign_cert")
     parser.add_argument(
-        "-d",
-        "--dir",
-        default=os.getcwd(),
-        help="Directory where certificates and keys are written to. Defaults to cwd.",
+        "--root",
+        default="ca_root",
+        help="Base name of root certificate to use for signing.",
+    )
+    parser.add_argument(
+        "--out",
+        default="cert",
+        help="Base name of output signed certificate.",
     )
     parser.add_argument(
         "-i",
@@ -53,7 +57,6 @@ def main(argv : Optional[List[str]] = None) -> None:
     )
 
     args = parser.parse_args(argv[1:])
-    cert_dir = args.dir
     identities = [str(identity) for identity in args.identities]
     common_name = from_list(args.common_name)
     expires_on = (
@@ -63,12 +66,9 @@ def main(argv : Optional[List[str]] = None) -> None:
     )
     key_type = trustme.KeyType[args.key_type]
 
-    if not os.path.isdir(cert_dir):
-        raise ValueError(f"--dir={cert_dir} is not a directory")
-
-    with open("ca_root.pem", "rb") as f:
+    with open(args.root + ".pem", "rb") as f:
         cert_bytes = f.read()
-    with open("ca_root-key.pem", "rb") as f:
+    with open(args.root + ".key", "rb") as f:
         private_key_bytes = f.read()
     # Load the CA certificate.
     ca = trustme.CA.from_pem(cert_bytes = cert_bytes,
@@ -79,8 +79,8 @@ def main(argv : Optional[List[str]] = None) -> None:
     )
 
     # Write the certificate and private key just created
-    server_key = os.path.join(cert_dir,  "cert.key")
-    server_cert = os.path.join(cert_dir, "cert.pem")
+    server_key = args.out + ".key"
+    server_cert = args.out + ".pem"
     cert.private_key_pem.write_to_path(path=server_key)
     with open(server_cert, mode="w") as f:
         f.truncate()
