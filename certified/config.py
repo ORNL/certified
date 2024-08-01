@@ -43,7 +43,7 @@ class PrivKey(BaseModel):
         """
         return load_der_private_key(self.data.get_secret_value(), password)
 
-    def pubkey(self, password=None) -> CertificatePublicKeyTypes:
+    def pubkey(self, password : Optional[str] = None) -> CertificatePublicKeyTypes:
         """Returns the public key object associated with this key.
    
         Args:

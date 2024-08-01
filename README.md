@@ -51,15 +51,26 @@ As a user, install with
 
     pip install .
 
+## For development
+
 As a developer, install with:
 
-    poetry install --with docs
+    poetry install --with docs,test
 
 Add new dependencies using, e.g.:
 
     poetry add pydantic          # run-time dependency
     poetry add mkdocs-material --group docs # documentation-generation dep.
     poetry add mypy            --group test # test-time dep.
+
+Run tests with:
+
+    poetry run mypy .
+    poetry run pytest
+
+Preview the documentation with:
+
+    poetry run mkdocs serve &
 
 # Usage
 
@@ -124,7 +135,7 @@ Start a test server using:
 
 ```
 uvicorn --ssl-keyfile server.key --ssl-certfile server.pem \
-        --ssl-cert-reqs 1 --ssl-ca-certs ca_root.pem \
+        --ssl-cert-reqs 2 --ssl-ca-certs ca_root.pem \
         server:app
 ```
 
@@ -136,6 +147,11 @@ or
 
     curl --cacert ca_root.pem --key client.key --cert client.pem https://127.0.0.1:8000/
 
+
+# Docs
+
+Documentation was built using this guide -- which comes highly recommended:
+https://realpython.com/python-project-documentation-with-mkdocs/
 
 # References
 
