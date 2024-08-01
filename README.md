@@ -1,4 +1,112 @@
+# Certified
+
+How do I know who originated an API request -- what organization
+they come from, and what kinds of organizational policies they have
+been asked to follow?
+
+How can I consistently apply my own site's security policy
+to API actions?
+
+And -- the big question -- how can I, as a client using an API,
+obtain, manage, and send these credentials to servers I interact
+with?
+
+The certified package has you covered.
+
+
+# Proofs
+
+Certificates are fundamentally about providing logical proofs
+of facts using cryptographic.
+
+## Definitions:
+
+* authentication - proving that someone is who they claim to be
+
+* authorization  - proving that an action is allowed within the current context
+
+* intent         - proving that an action was intended by the requestor
+
+
+## Pitfalls of tokens
+
+The number one problem with tokens is that they are not
+a reliable method of authentication.  Authentication must
+be established when a network communication channel is opened --
+for example during the TLS handshake between client and server.
+Security conversations become much simpler within mutually
+authenticated TLS channels -- since then each party has
+established who it is talking to.
+
+Other forms of authentication are subject to third-party
+attack.  Tokens are especially vulnerable because
+they are exchanged at the application level.
+Any server that has observed a token has the potential
+to re-use the token -- impersonating the original
+sender of the request.
+
+# Installation
+
+As a user, install with
+
+    pip install .
+
+As a developer, install with:
+
+    poetry install --with docs
+
+Add new dependencies using, e.g.:
+
+    poetry add pydantic          # run-time dependency
+    poetry add mkdocs-material --group docs # documentation-generation dep.
+    poetry add mypy            --group test # test-time dep.
+
 # Usage
+
+The certified.json file contains your `certified.Config`
+data including:
+
+  * `identity` -- your own identity as a client/server
+  * `trusted_clients` -- clients allowed to access your API
+  * `trusted_servers` -- API servers you wish to interact with
+
+## API Client
+
+To interact with an API server that requires mTLS,
+you can instantiate an `APIClient` context object.
+This context is an `httpx.Client` that bakes in the
+appropriate client and server certificates so that
+you can be sure you are interacting with the `trusted_server`
+you requested.
+
+
+## API Server
+
+To run an API server, create an ASGI webserver application
+class (e.g. using `app = FastAPI()` inside `my_api/server.py`),
+and then start it with:
+
+    certified start my_api.server:app [additional options]
+
+
+This uses uvicorn internally and is equivalent to running:
+
+    uvicorn --ssl-keyfile server.key --ssl-certfile server.pem \
+            --ssl-cert-reqs 2 --ssl-ca-certs ca_root.pem \
+            --host <ip_from_config> --port <port_from_config> \
+            my_api.server:app [additional options]
+
+where `--ssl-cert-reqs 2` is the magic argument needed to ensure clients
+authenticate with TLS, and the other keys are created from pem-encoding
+data from your server's `certified.json` config file.
+
+We actually implement this internally with uvicorn's
+[programmatic API](https://www.uvicorn.org/deployment/#running-programmatically).
+
+    uvicorn.run("main:app", host="127.0.0.1", port=5000, log_level="info")
+
+
+# Root CA-s
 
 Generate a root certificate:
     python3 new_ca.py
