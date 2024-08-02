@@ -1,5 +1,61 @@
 # Certified
 
+An idiomatic framework for using certificates
+and cookies (macaroons/biscuits) within python web API-s.
+
+We make the following design choices:
+
+* mTLS - mutual transport layer certificates (x509) authenticate
+  client and server to one another
+
+* scopes - clients can "prove" they have access to a scope
+  (e.g. admin) by including it within their 'certificatePolicies'
+  *at the handshake* phase
+
+* cookies - we rely on the [datalog model of biscuits](https://doc.biscuitsec.org/reference/datalog)
+  to exchange cookies that carry authorization proofs.
+  Because Certified warehouses certificates 
+
+* symmetry - symmetric ideas are used for setting up client and server
+  cryptographic trust and certificate issuance.  This allows
+  servers to act as clients in complex workflows, and clients
+  to act as servers to run callbacks.
+
+* key management - we prescribe a file layout for these.  Key file-names
+  serve as a short-hand for referencing a given client/server.
+
+  - `identity` -- PEM-encoded private and public keys
+    (similar to `.ssh/id_ed25519` and `id_ed25519.pub`)
+
+    * multiple public keys within this directory refer to the
+      same identity, but are named after the CA that signed them.
+
+  - `trusted_clients` -- PEM-encoded trusted client public keys
+
+    * these are allowed to access any API you start with (certified start)
+      (similar to `.ssh/authorized_keys`)
+
+    * a "name.scope" file next to a "name.pem" file gives
+      a space-separated list of allowed scopes for that client
+
+  - `trusted_servers` -- PEM-encoded trusted server public keys
+
+    * these name servers you want to access
+      (similar to `.ssh/known_hosts`)
+
+  - `trusted_client_roots` -- PEM-encoded trusted verifiers of clients
+      (similar to `/usr/share/ca-certificates/mozilla` from the ca-certificates
+       package)
+
+    * these provide a way to indirectly grant access to clients,
+      by validating they have a signature from this certificate authority
+
+    * the certificatePolicies for these verifiers list
+      the allowed scopes for clients authenticated by that verifier
+
+
+---
+
 How do I know who originated an API request -- what organization
 they come from, and what kinds of organizational policies they have
 been asked to follow?
@@ -14,36 +70,7 @@ with?
 The certified package has you covered.
 
 
-# Proofs
-
-Certificates are fundamentally about providing logical proofs
-of facts using cryptographic.
-
-## Definitions:
-
-* authentication - proving that someone is who they claim to be
-
-* authorization  - proving that an action is allowed within the current context
-
-* intent         - proving that an action was intended by the requestor
-
-
-## Pitfalls of tokens
-
-The number one problem with tokens is that they are not
-a reliable method of authentication.  Authentication must
-be established when a network communication channel is opened --
-for example during the TLS handshake between client and server.
-Security conversations become much simpler within mutually
-authenticated TLS channels -- since then each party has
-established who it is talking to.
-
-Other forms of authentication are subject to third-party
-attack.  Tokens are especially vulnerable because
-they are exchanged at the application level.
-Any server that has observed a token has the potential
-to re-use the token -- impersonating the original
-sender of the request.
+See [documentation][docs] for explanations and howto-s.
 
 # Installation
 
@@ -72,86 +99,9 @@ Preview the documentation with:
 
     poetry run mkdocs serve &
 
-# Usage
-
-The certified.json file contains your `certified.Config`
-data including:
-
-  * `identity` -- your own identity as a client/server
-  * `trusted_clients` -- clients allowed to access your API
-  * `trusted_servers` -- API servers you wish to interact with
-
-## API Client
-
-To interact with an API server that requires mTLS,
-you can instantiate an `APIClient` context object.
-This context is an `httpx.Client` that bakes in the
-appropriate client and server certificates so that
-you can be sure you are interacting with the `trusted_server`
-you requested.
-
-
-## API Server
-
-To run an API server, create an ASGI webserver application
-class (e.g. using `app = FastAPI()` inside `my_api/server.py`),
-and then start it with:
-
-    certified start my_api.server:app [additional options]
-
-
-This uses uvicorn internally and is equivalent to running:
-
-    uvicorn --ssl-keyfile server.key --ssl-certfile server.pem \
-            --ssl-cert-reqs 2 --ssl-ca-certs ca_root.pem \
-            --host <ip_from_config> --port <port_from_config> \
-            my_api.server:app [additional options]
-
-where `--ssl-cert-reqs 2` is the magic argument needed to ensure clients
-authenticate with TLS, and the other keys are created from pem-encoding
-data from your server's `certified.json` config file.
-
-We actually implement this internally with uvicorn's
-[programmatic API](https://www.uvicorn.org/deployment/#running-programmatically).
-
-    uvicorn.run("main:app", host="127.0.0.1", port=5000, log_level="info")
-
-
-# Root CA-s
-
-Generate a root certificate:
-    python3 new_ca.py
-
-Create a signed server and client certificate with it:
-    python3 sign_cert.py -o server
-    python3 sign_cert.py -i me@localhost -o client
-
-Explanation -- the second command creates a cert.pem and cert.key
-file which attests that the CA knows the identity listed in cert.pem.
-The cert.key file is used during a TLS socket handshake to prove
-that the identity in cert.pem belongs to them.
-
-Start a test server using:
-
-```
-uvicorn --ssl-keyfile server.key --ssl-certfile server.pem \
-        --ssl-cert-reqs 2 --ssl-ca-certs ca_root.pem \
-        server:app
-```
-
-Securely query the server with:
-
-    python3 client.py
-
-or
-
-    curl --cacert ca_root.pem --key client.key --cert client.pem https://127.0.0.1:8000/
-
-
 # Docs
 
-Documentation was built using this guide -- which comes highly recommended:
-https://realpython.com/python-project-documentation-with-mkdocs/
+Documentation was built using [this guide](https://realpython.com/python-project-documentation-with-mkdocs/) -- which comes highly recommended:
 
 # References
 
