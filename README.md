@@ -21,37 +21,9 @@ We make the following design choices:
   servers to act as clients in complex workflows, and clients
   to act as servers to run callbacks.
 
-* key management - we prescribe a file layout for these.  Key file-names
-  serve as a short-hand for referencing a given client/server.
-
-  - `identity` -- PEM-encoded private and public keys
-    (similar to `.ssh/id_ed25519` and `id_ed25519.pub`)
-
-    * multiple public keys within this directory refer to the
-      same identity, but are named after the CA that signed them.
-
-  - `trusted_clients` -- PEM-encoded trusted client public keys
-
-    * these are allowed to access any API you start with (certified start)
-      (similar to `.ssh/authorized_keys`)
-
-    * a "name.scope" file next to a "name.pem" file gives
-      a space-separated list of allowed scopes for that client
-
-  - `trusted_servers` -- PEM-encoded trusted server public keys
-
-    * these name servers you want to access
-      (similar to `.ssh/known_hosts`)
-
-  - `trusted_client_roots` -- PEM-encoded trusted verifiers of clients
-      (similar to `/usr/share/ca-certificates/mozilla` from the ca-certificates
-       package)
-
-    * these provide a way to indirectly grant access to clients,
-      by validating they have a signature from this certificate authority
-
-    * the certificatePolicies for these verifiers list
-      the allowed scopes for clients authenticated by that verifier
+* key management - we prescribe a file layout for these.
+  Key file-names serve as a short-hand for referencing a
+  given client/server.  See [docs/keys](docs/keys.md).
 
 
 ---
@@ -111,8 +83,24 @@ Documentation was built using [this guide](https://realpython.com/python-project
 [exts]: https://www.golinuxcloud.com/add-x509-extensions-to-certificate-openssl/ "Adding Extensions to x509"
 [globus]: https://globus.stanford.edu/security.html
 
+## Use of TLS/certs in services
+
+[uvicorn]: https://github.com/encode/uvicorn/discussions/2307
+[rucio transfers]: https://rucio.cern.ch/documentation/operator/transfers/transfers-overview/
+[fts3 logging setup (enables TLS)]: https://fts3-docs.web.cern.ch/fts3-docs/docs/install/messaging.html
+
+[fts3 tls]: https://fts3-docs.web.cern.ch/fts3-docs/docs/developers/tls_shenanigans.html
+
 ## more on custom attributes using openssl command
 
 https://stackoverflow.com/questions/36007663/how-to-add-custom-field-to-certificate-using-openssl
 https://stackoverflow.com/questions/17089889/openssl-x509v3-extended-key-usage -- config. file attributes
 https://superuser.com/questions/947061/openssl-unable-to-find-distinguished-name-in-config/1118045 -- use a complete config
+
+## More on JWT/cookies/macaroons/biscuits
+
+[Indigo IAM JWT profiles]: https://indigo-iam.github.io/v/v1.9.0/docs/reference/configuration/jwt-profiles/
+
+
+
+

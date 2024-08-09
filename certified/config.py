@@ -1,11 +1,10 @@
-"""Defines the format for the certified-apis configuration file.
+"""Defines the format for the certified-apis configuration directory
 
-This is usually stored in $HOME/.config/certified.json
+This is usually stored in $HOME/.config/certified
 but can be overriden by the value of $CERTIFIED_CONFIG
 in the environment.
 
-Note: at present, this is a single configuration file.
-However, we should really use a $HOME/.ssh directory-style
+The configuration uses a $HOME/.ssh directory-style
 layout with:
 
     - authorized_keys -- listing `TrustedClient`-s
@@ -20,12 +19,12 @@ from pydantic import BaseModel, Field, SecretBytes
 
 URL = str
 
-# We assume DER-encoding for all these things (although PEM is an alternative)
+# We assume PEM-encoding for all these things (although DER is an alternative)
 # https://cryptography.io/en/latest/hazmat/primitives/asymmetric/serialization/
 
 from cryptography.hazmat.primitives.serialization import (
-    load_der_private_key,
-    load_der_public_key
+    load_pem_private_key,
+    load_pem_public_key
 )
 from cryptography.hazmat.primitives.asymmetric.types import (
     PrivateKeyTypes,
@@ -33,7 +32,7 @@ from cryptography.hazmat.primitives.asymmetric.types import (
 )
 
 class PrivKey(BaseModel):
-    data : SecretBytes # DER-encoded
+    data : SecretBytes # PEM-encoded
 
     def privkey(self, password : Optional[str] = None) -> PrivateKeyTypes:
         """Returns the private key object associated with this key.
@@ -41,7 +40,7 @@ class PrivKey(BaseModel):
         Args:
             password: Password to decipher private key (if required).
         """
-        return load_der_private_key(self.data.get_secret_value(), password)
+        return load_pem_private_key(self.data.get_secret_value(), password)
 
     def pubkey(self, password : Optional[str] = None) -> CertificatePublicKeyTypes:
         """Returns the public key object associated with this key.
@@ -52,12 +51,12 @@ class PrivKey(BaseModel):
         return self.privkey(password).public_key()
 
 class PubKey(BaseModel):
-    data : bytes # DER-encoded
+    data : bytes # PEM-encoded
 
     def pubkey(self) -> CertificatePublicKeyTypes:
         """Returns the public key object associated with this key.
         """
-        return load_der_public_key(self.data)
+        return load_pem_public_key(self.data)
 
 class TrustedClient(BaseModel):
     """
