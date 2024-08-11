@@ -337,11 +337,11 @@ class LeafCert:
     def __init__(
         self, private_key_pem: bytes, server_cert_pem: bytes, chain_to_ca: List[bytes] = []
     ) -> None:
-        self.private_key_pem = Blob(private_key_pem, "private")
-        self.cert_chain_pems = [Blob(pem, "public") for pem in [server_cert_pem] + chain_to_ca]
+        self.private_key_pem = Blob(private_key_pem, True)
+        self.cert_chain_pems = [Blob(pem, False) for pem in [server_cert_pem] + chain_to_ca]
         self.private_key_and_cert_chain_pem = Blob(
             private_key_pem + server_cert_pem + b"".join(chain_to_ca),
-            "private"
+            True
         )
 
     def configure_cert(self, ctx: ssl.SSLContext) -> None:

@@ -17,7 +17,40 @@ from cryptography.hazmat.primitives.serialization import (
 
 __all__ = ["Blob", "PublicBlob", "PrivateBlob"]
 
-PublicOrSecret = Union[Literal["public"], Literal["secret"]]
+Pstr = Union[str, "os.PathLike[str]"]
+
+@contextmanager
+def set_umask(umask):
+    prev_umask = os.umask(umask)
+    try:
+        yield
+    finally:
+        os.umask(prev_umask)
+
+@contextmanager
+def new_file(fname : Pstr, mode : int, perm : int, remove=False):
+    """ Fix the file open() API to create
+        new files securely.
+    """
+    flags = os.O_RDWR | os.O_CREAT | os.O_EXCL
+    #umask = 0o777 ^ perm  # Prevents always downgrading umask to 0.
+
+    if remove:
+        try:
+            os.remove(fname)
+        except FileNotFoundError:
+            pass
+
+    #with set_umask(umask):
+    # open fails if file exists
+    fdesc = os.open(fname, flags, perm)
+    with os.fdopen(fdesc, mode) as f:
+        # this context closes fd on completion
+        yield f
+
+def is_user_only(fname) -> bool:
+    stat = os.stat(fname)
+    return (stat.st_mode & 0o77) == 0
 
 class Blob:
     """A convenience wrapper for a blob of bytes, mostly
@@ -28,14 +61,13 @@ class Blob:
       secret: either "public" or "secret" (setting file permissions for I/O)
     """
 
-    def __init__(self, data: bytes, secret: PublicOrSecret) -> None:
+    def __init__(self, data: bytes, is_secret : bool) -> None:
         self._data = data
-        self.is_secret = secret == "secret"
+        self.is_secret = is_secret
 
     @classmethod
-    def read(cls, fname: Union[str, "os.PathLike[str]"]) -> "Blob":
-        stat = os.stat(fname)
-        is_secret = (stat.st_mode & 0o77) == 0
+    def read(cls, fname: Pstr) -> "Blob":
+        is_secret = is_user_only(fname)
         with open(fname, "rb") as f:
             data = f.read()
         return cls(data, "secret" if is_secret else "public")
@@ -50,7 +82,7 @@ class Blob:
         return self.bytes().decode("ascii")
 
     def write(
-        self, path: Union[str, "os.PathLike[str]"], append: bool = False
+        self, path: Pstr, append: bool = False
     ) -> None:
         """Writes the data to the file at the given path.
 
@@ -61,13 +93,17 @@ class Blob:
         """
         p = Path(path)
         if append:
-            mode = "ab"
+            if self.is_secret:
+                assert is_user_only(p)
+            ctxt = lambda: p.open("ab")
         else:
-            mode = "wb"
-        # ensure user-only visibility before writing
-        if self.is_secret and not p.exists():
-            p.touch(mode=0o600)
-        with p.open(mode) as f:
+            if self.is_secret:
+                ctxt = lambda: new_file(p, "wb", 0o600)
+            else:
+                ctxt = lambda: new_file(p, "wb", 0o644)
+                #ctxt = lambda: p.open("wb")
+
+        with ctxt() as f:
             f.write(self._data)
 
     @contextmanager
@@ -104,7 +140,7 @@ class Blob:
 
 class PublicBlob(Blob):
     def __init__(self, cert : x509) -> None:
-        super().__init__(cert.public_bytes(Encoding.PEM), "public")
+        super().__init__(cert.public_bytes(Encoding.PEM), False)
 
 class PrivateBlob(Blob):
     def __init__(self, key : CertificateIssuerPrivateKeyTypes) -> None:
@@ -117,4 +153,4 @@ class PrivateBlob(Blob):
             pkey = key.private_bytes(Encoding.PEM,
                 PrivateFormat.OpenSSH,
                 NoEncryption())
-        super().__init__(pkey, "private")
+        super().__init__(pkey, True)

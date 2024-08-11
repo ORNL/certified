@@ -13,7 +13,7 @@ import os
 from pathlib import Path
 from functools import cache
 
-from .blob import Blob
+from .blob import Blob, is_user_only
 
 Pstr = Union[str, "os.PathLike[str]"]
 
@@ -116,8 +116,11 @@ def check_config(base : Path) -> Tuple[List[str], List[str]]:
     if not base.is_dir():
         return gone(base)
 
-    if not (base/"CA.key").is_file():
-        gone(base/"CA.key")
+    key = base/"CA.key"
+    if not (key).is_file():
+        gone(key)
+    if not is_user_only(key):
+        error(f"Invalid key file permissions on {key}!")
     if not (base/"CA.crt").is_file():
         gone(base/"CA.crt")
 
