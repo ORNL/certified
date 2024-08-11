@@ -1,140 +1,20 @@
-""" Functionality for generating certificates.
+""" A class for holding x509 signing certificates (CA)
+    and leaf certificates (LeafCert)
 """
 
 from typing import Optional, List
-from enum import Enum
 import datetime
-import ipaddress
 import ssl
-import idna
 
-from cryptography.hazmat.primitives.asymmetric import (
-    ed448, 
-    ed25519
-)
-from cryptography.hazmat.primitives.asymmetric.types import (
-    CertificatePublicKeyTypes,
-    CertificateIssuerPrivateKeyTypes
-)
-from cryptography.hazmat.primitives import hashes
-from cryptography.x509.oid import NameOID
 from cryptography import x509
-from cryptography.hazmat.primitives.serialization import (
-    Encoding,
-    NoEncryption,
-    PrivateFormat,
-    load_pem_private_key,
+#from cryptography.hazmat.primitives import hashes
+
+from .blob import PublicBlob, PrivateBlob
+import certified.encode as encode
+from .encode import (
+    CertificateIssuerPrivateKeyTypes,
+    cert_builder_common,
 )
-
-from blob import *
-
-def PrivIface(keytype) -> CertificateIssuerPrivateKeyTypes:
-    if keytype == "ed25519":
-        return ed25519.Ed25519PrivateKey
-    elif keytype == "ed448":
-        return ed448.Ed448PrivateKey
-
-def PubIface(keytype) -> CertificatePublicKeyTypes:
-    if keytype == "ed25519":
-        return ed25519.Ed25519PublicKey
-    elif keytype == "ed448":
-        return ed448.Ed448PublicKey
-
-
-def _cert_builder_common(
-        subject: x509.Name,
-        issuer: x509.Name,
-        public_key: CertificatePublicKeyTypes,
-        not_before: Optional[datetime.datetime] = None,
-        not_after: Optional[datetime.datetime] = None,
-    ) -> x509.CertificateBuilder:
-    not_before = not_before if not_before else datetime.datetime.now(datetime.timezone.utc)
-    # default valid for ~1 years
-    not_after = not_after if not_after else (
-            not_before + datetime.timedelta(days=365)
-    )
-    return (
-        x509.CertificateBuilder()
-            . subject_name(subject)
-            . issuer_name(issuer)
-            . public_key(public_key)
-            . not_valid_before(not_before)
-            . not_valid_after(not_after)
-            . serial_number(x509.random_serial_number())
-            . add_extension(
-                x509.SubjectKeyIdentifier.from_public_key(public_key),
-                critical=False,
-            )
-    )
-
-def encode_name(
-    organization_name: str,
-    name: str,
-    common_name: Optional[str] = None,
-) -> x509.Name:
-    """
-    Build and return an x509.Name.
-
-    Args:
-          common_name: Sets the "Common Name" of the certificate. This is a
-            legacy field that used to be used to check identity. It's an
-            arbitrary string with poorly-defined semantics, so `modern
-            programs are supposed to ignore it
-            <https://developers.google.com/web/updates/2017/03/chrome-58-deprecations#remove_support_for_commonname_matching_in_certificates>`__.
-            But it might be useful if you need to test how your software
-            handles legacy or buggy certificates.
-
-          organization_name: Sets the "Organization Name" (O) attribute on the
-            certificate.
-
-          organization_unit_name: Sets the "Organization Unit Name" (OU)
-            attribute on the certificate.
-    """
-
-    name_pieces = []
-    location = False # FIXME
-    if location:
-        name_pieces += [
-            x509.NameAttribute(NameOID.COUNTRY_NAME, "US"),
-            x509.NameAttribute(NameOID.STATE_OR_PROVINCE_NAME, "California"),
-            x509.NameAttribute(NameOID.LOCALITY_NAME, "San Francisco"),
-        ]
-    name_pieces += [
-        x509.NameAttribute(NameOID.ORGANIZATION_NAME, organization_name),
-        x509.NameAttribute(NameOID.ORGANIZATIONAL_UNIT_NAME, name),
-    ]
-    if common_name is not None:
-        name_pieces.append(x509.NameAttribute(NameOID.COMMON_NAME, common_name))
-    return x509.Name(name_pieces)
-
-def _encode_host(host):
-    # Have to try ip_address first, because ip_network("127.0.0.1") is
-    # interpreted as being the network 127.0.0.1/32. Which I guess would be
-    # fine, actually, but why risk it.
-    try:
-        return x509.IPAddress(ipaddress.ip_address(host))
-    except ValueError:
-        try:
-            return x509.IPAddress(ipaddress.ip_network(host))
-        except ValueError:
-            pass
-
-    # Encode to an A-label, like cryptography wants
-    if host.startswith("*."):
-        alabel_bytes = b"*." + idna.encode(host[2:], uts46=True)
-    else:
-        alabel_bytes = idna.encode(host, uts46=True)
-    # Then back to text, which is mandatory on cryptography 2.0 and earlier,
-    # and may or may not be deprecated in cryptography 2.1.
-    alabel = alabel_bytes.decode("ascii")
-    return x509.DNSName(alabel)
-
-def _encode_SAN(emails, hosts, uris):
-    return x509.SubjectAlternativeName(
-                [x509.RFC822Name(e) for e in emails],
-              + [_encode_host(ip) for ip in hosts] 
-              + [x509.UniformResourceIdentifier(u) for u in uris]
-           )
 
 class CA:
     """ A certificate plus a private key.
@@ -154,7 +34,7 @@ class CA:
 
     @classmethod
     def load(cls, cert_bytes: bytes, private_key_bytes: bytes,
-                     password: Optional[str] = None) -> None:
+                  password: Optional[str] = None) -> None:
         """Load a CA from an existing cert and private key.
 
         Args:
@@ -167,21 +47,39 @@ class CA:
         ca._private_key = load_pem_private_key(
                     private_key_bytes, password=password
         )
+        try:
+            basic = ca._certificate.extensions \
+                      .get_extension_for_class(x509.BasicConstraints)
+            assert basic.value.ca, "Loaded certificate is not a CA."
+            self._path_length = basic.value.path_length
+        except x509.ExtensionNotFound:
+            raise ValueError("BasicConstraints not found.")
+            self._path_length = None
         return ca
 
     @classmethod
     def new(cls,
         name : x509.Name,
+        san  : Optional[x509.SubjectAlternativeName] = None,
         path_length: int = 0,
         key_type : str = "ed25519",
         parent_cert: Optional["CA"] = None,
     ) -> None:
-        """ Generate a new root CA.
+        """ Generate a new CA (root if parent_cert is None)
+
+        Args:
+          name: the subject of the key
+          san:  the subject alternate name, including domains,
+                emails, and uri-s
+          path_length: max number of child CA-s allowed in a trust chain
+          key_type: cryptographic algorithm for key use
+          parent_cert: parent who will sign this CA (None = self-sign)
         """
         self = cls()
 
         #self.parent_cert = parent_cert
-        self._private_key = PrivIface(key_type).generate()
+        # Generate our key
+        self._private_key = encode.PrivIface(key_type).generate()
         self._path_length = path_length
 
         issuer = name
@@ -200,7 +98,7 @@ class CA:
         else:
             aki = None
 
-        cert_builder = _cert_builder_common(
+        cert_builder = cert_builder_common(
             name, issuer, self._private_key.public_key()
         ).add_extension(
             x509.BasicConstraints(ca=True, path_length=path_length),
@@ -208,6 +106,9 @@ class CA:
         )
         if aki:
             cert_builder = cert_builder.add_extension(aki, critical=False)
+        if san:
+            cert_builder = cert_builder.add_extension(san, critical=True)
+
         self._certificate = cert_builder.add_extension(
             x509.KeyUsage(
                 digital_signature=True,  # OCSP
@@ -228,7 +129,7 @@ class CA:
         )
         return self
 
-    def __str__(self):
+    def __str__(self) -> str:
         return str(self.cert_pem)
 
     @property
@@ -242,6 +143,32 @@ class CA:
         """`Blob`: The PEM-encoded private key for this CA. Use this to sign
         other certificates from this CA."""
         return PrivateBlob(self._private_key)
+
+    def create_csr(self) -> PublicBlob:
+        """ Generate a CSR.
+        """
+        # parsing x509
+        # crt.extensions.get_extension_for_class(
+        #        x509.SubjectKeyIdentifier
+        #    )
+        #    sign_key = parent_cert._private_key
+        #    parent_certificate = parent_cert._certificate
+        #    issuer = parent_certificate.subject
+        SAN = self._certificate.extensions.get_extension_for_class(
+                SubjectAlternativeName
+        )
+
+        csr = x509.CertificateSigningRequestBuilder().subject_name(
+            self._certificate.subject
+        ).add_extension(
+            SAN.value,
+            critical=SAN.critical,
+        ).sign(self._private_key) #, hashes.SHA256())
+        return PublicBlob(csr)
+
+    def revoke(self) -> None:
+        # https://cryptography.io/en/latest/x509/reference/#x-509-certificate-revocation-list-builder
+        raise RuntimeError("FIXME: Not implemented.")
 
     def create_child_ca(self, name : x509.Name,
                               key_type: str = "ed25519") -> "CA":
@@ -261,14 +188,14 @@ class CA:
             raise ValueError("Can't create child CA: path length is 0")
 
         path_length = self._path_length - 1
-        return CA(parent_cert=self, path_length=path_length, key_type=key_type)
+        return CA.new(parent_cert=self, path_length=path_length, key_type=key_type)
 
     def issue_cert(
         self,
+        name: x509.Name,
         emails: List[str],
         hosts: List[str],
         uris: List[str],
-        name: x509.Name,
         not_before: Optional[datetime.datetime] = None,
         not_after: Optional[datetime.datetime] = None,
         key_type: str = "ed25519"
@@ -298,7 +225,7 @@ class CA:
           uris:
             - "https://dx.doi.org/10.1.1.1"
 
-          name: x509 name (see `encode_name`)
+          name: x509 name (see `certified.encode.name`)
 
           not_before: Set the validity start date (notBefore) of the certificate.
             This argument type is `datetime.datetime`.
@@ -314,11 +241,8 @@ class CA:
           LeafCert: the newly-generated certificate.
 
         """
-        if not identities and common_name is None:
-            raise ValueError("Must specify at least one identity or common name")
 
         key = key_type._generate_key()
-
         ski_ext = self._certificate.extensions.get_extension_for_class(
             x509.SubjectKeyIdentifier
         )
@@ -327,7 +251,7 @@ class CA:
         )
 
         cert = (
-            _cert_builder_common(
+            cert_builder_common(
                 name,
                 self._certificate.subject,
                 key.public_key(),
@@ -340,7 +264,7 @@ class CA:
             )
             .add_extension(aki, critical=False)
             .add_extension(
-                _encode_SAN(emails, hosts, uris),
+                encode.SAN(emails, hosts, uris),
                 critical=True,
             )
             .add_extension(
@@ -378,9 +302,6 @@ class CA:
             PrivateBlob(key).bytes(),
             PublicBlob(cert).bytes()
         )
-
-    # For backwards compatibility
-    issue_server_cert = issue_cert
 
     def configure_trust(self, ctx: ssl.SSLContext) -> None:
         """Configure the given context object to trust certificates signed by
@@ -435,34 +356,9 @@ class LeafCert:
             ctx.load_cert_chain(path)
 
 def new_ca():
-    name = encode_name("My Company", "My Division", "mycompany.com")
+    name = encode.name("My Company", "My Division", "mycompany.com")
     ca = CA.new(name)
     return ca
-    # Generate our key
-    #root_key = ec.generate_private_key(ec.SECP256R1())
-    root_key = PrivIface("ed25519").generate()
-    
-    root_cert = (cert_builder_common(subject, issuer, root_key.public_key())
-        . add_extension(
-            x509.BasicConstraints(ca=True, path_length=None),
-            critical=True)
-        . add_extension(
-                x509.KeyUsage(
-                digital_signature=True,
-                content_commitment=False,
-                key_encipherment=False,
-                data_encipherment=False,
-                key_agreement=False,
-                key_cert_sign=True,
-                crl_sign=True,
-                encipher_only=False,
-                decipher_only=False,
-            ),
-            critical=True,
-        ).add_extension( _encode_SAN(emails, hosts, uris),
-            critical=True,
-        ).sign(root_key, None) ) # hashes.SHA256()
-    return root_cert
 
-ca = new_ca()
-print(ca)
+#ca = new_ca()
+#print(ca)

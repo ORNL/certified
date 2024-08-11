@@ -33,11 +33,12 @@ class Blob:
         self.is_secret = secret == "secret"
 
     @classmethod
-    def read(self, fname: Union[str, "os.PathLike[str]"]):
+    def read(cls, fname: Union[str, "os.PathLike[str]"]) -> "Blob":
         stat = os.stat(fname)
-        self.is_secret = (stat.st_mode & 0o77) == 0
+        is_secret = (stat.st_mode & 0o77) == 0
         with open(fname, "rb") as f:
-            self._data = f.read()
+            data = f.read()
+        return cls(data, "secret" if is_secret else "public")
 
     def bytes(self) -> bytes:
         """Returns the data as a `bytes` object."""
@@ -107,6 +108,13 @@ class PublicBlob(Blob):
 
 class PrivateBlob(Blob):
     def __init__(self, key : CertificateIssuerPrivateKeyTypes) -> None:
-        super().__init__(key.private_bytes(
-                Encoding.PEM, PrivateFormat.TraditionalOpenSSL, NoEncryption()
-            ), "private")
+        try:
+            pkey = key.private_bytes(
+                Encoding.PEM,
+                PrivateFormat.TraditionalOpenSSL,
+                NoEncryption())
+        except ValueError:
+            pkey = key.private_bytes(Encoding.PEM,
+                PrivateFormat.OpenSSH,
+                NoEncryption())
+        super().__init__(pkey, "private")
