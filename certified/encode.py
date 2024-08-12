@@ -76,26 +76,27 @@ def cert_builder_common(
 
 def name(
     organization_name: str,
-    name: str,
+    unit: str,
     common_name: Optional[str] = None,
 ) -> x509.Name:
     """
     Build and return an x509.Name.
 
     Args:
-          common_name: Sets the "Common Name" of the certificate. This is a
-            legacy field that used to be used to check identity. It's an
-            arbitrary string with poorly-defined semantics, so `modern
-            programs are supposed to ignore it
-            <https://developers.google.com/web/updates/2017/03/chrome-58-deprecations#remove_support_for_commonname_matching_in_certificates>`__.
-            But it might be useful if you need to test how your software
-            handles legacy or buggy certificates.
-
-          organization_name: Sets the "Organization Name" (O) attribute on the
+       organization_name: Sets the "Organization Name" (O) attribute on the
             certificate.
 
-          organization_unit_name: Sets the "Organization Unit Name" (OU)
+       unit: Sets the "Organization Unit Name" (OU)
             attribute on the certificate.
+    
+       common_name: Sets the "Common Name" of the certificate. This is a
+         legacy field that used to be used to check identity. It's an
+         arbitrary string with poorly-defined semantics, so `modern
+         programs are supposed to ignore it
+         <https://developers.google.com/web/updates/2017/03/chrome-58-deprecations#remove_support_for_commonname_matching_in_certificates>`__.
+         But it might be useful if you need to test how your software
+         handles legacy or buggy certificates.
+
     """
 
     name_pieces = []
@@ -108,7 +109,7 @@ def name(
         ]
     name_pieces += [
         x509.NameAttribute(NameOID.ORGANIZATION_NAME, organization_name),
-        x509.NameAttribute(NameOID.ORGANIZATIONAL_UNIT_NAME, name),
+        x509.NameAttribute(NameOID.ORGANIZATIONAL_UNIT_NAME, unit),
     ]
     if common_name is not None:
         name_pieces.append(x509.NameAttribute(NameOID.COMMON_NAME, common_name))
@@ -136,7 +137,27 @@ def _host(host):
     alabel = alabel_bytes.decode("ascii")
     return x509.DNSName(alabel)
 
-def SAN(emails, hosts, uris) -> x509.SubjectAlternativeName:
+def SAN(emails=[], hosts=[], uris=[]) -> x509.SubjectAlternativeName:
+    """ Build a subject alternative name field.
+        Examples include:
+
+        * emails: The emails that this certificate will be valid for.
+
+            - Email address: ``example@example.com``
+
+        * hosts:
+            - Regular hostname: ``example.com``
+            - Wildcard hostname: ``*.example.com``
+            - International Domain Name (IDN): ``café.example.com``
+            - IDN in A-label form: ``xn--caf-dma.example.com``
+            - IPv4 address: ``127.0.0.1``
+            - IPv6 address: ``::1``
+            - IPv4 network: ``10.0.0.0/8``
+            - IPv6 network: ``2001::/16``
+
+        * uris:
+            - "https://dx.doi.org/10.1.1.1"
+    """
     assert sum(map(len, [emails, hosts, uris])) > 0, "No identities provided."
     return x509.SubjectAlternativeName(
                 [x509.RFC822Name(e) for e in emails]

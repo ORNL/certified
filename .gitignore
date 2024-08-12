@@ -1,4 +1,5 @@
 *.pem
 *.key
+*.crt
 *.pyc
 __pycache__

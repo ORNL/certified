@@ -7,9 +7,10 @@ import datetime
 import ssl
 
 from cryptography import x509
+from cryptography.x509.oid import ExtendedKeyUsageOID
 #from cryptography.hazmat.primitives import hashes
 
-from .blob import PublicBlob, PrivateBlob
+from .blob import PublicBlob, PrivateBlob, Blob
 import certified.encode as encode
 from .encode import (
     CertificateIssuerPrivateKeyTypes,
@@ -107,7 +108,7 @@ class CA:
         if aki:
             cert_builder = cert_builder.add_extension(aki, critical=False)
         if san:
-            cert_builder = cert_builder.add_extension(san, critical=True)
+            cert_builder = cert_builder.add_extension(san, critical=False)
 
         self._certificate = cert_builder.add_extension(
             x509.KeyUsage(
@@ -133,13 +134,18 @@ class CA:
         return str(self.cert_pem)
 
     @property
+    def certificate(self) -> x509.Certificate:
+        return self._certificate
+
+    @property
     def cert_pem(self) -> PublicBlob:
         """`Blob`: The PEM-encoded certificate for this CA. Add this to your
         trust store to trust this CA."""
         return PublicBlob(self._certificate)
 
-    @property
-    def private_key_pem(self) -> PrivateBlob:
+    # this gets written to pytest error
+    # messages if @property is used
+    def get_private_key(self) -> PrivateBlob:
         """`Blob`: The PEM-encoded private key for this CA. Use this to sign
         other certificates from this CA."""
         return PrivateBlob(self._private_key)
@@ -193,9 +199,7 @@ class CA:
     def issue_cert(
         self,
         name: x509.Name,
-        emails: List[str],
-        hosts: List[str],
-        uris: List[str],
+        san: x509.SubjectAlternativeName,
         not_before: Optional[datetime.datetime] = None,
         not_after: Optional[datetime.datetime] = None,
         key_type: str = "ed25519"
@@ -208,24 +212,9 @@ class CA:
         supposed to use when checking identity.
 
         Args:
-          emails: The emails that this certificate will be valid for.
-
-            - Email address: ``example@example.com``
-
-          hosts:
-            - Regular hostname: ``example.com``
-            - Wildcard hostname: ``*.example.com``
-            - International Domain Name (IDN): ``café.example.com``
-            - IDN in A-label form: ``xn--caf-dma.example.com``
-            - IPv4 address: ``127.0.0.1``
-            - IPv6 address: ``::1``
-            - IPv4 network: ``10.0.0.0/8``
-            - IPv6 network: ``2001::/16``
-
-          uris:
-            - "https://dx.doi.org/10.1.1.1"
-
           name: x509 name (see `certified.encode.name`)
+
+          san: subject alternate names -- see encode.SAN
 
           not_before: Set the validity start date (notBefore) of the certificate.
             This argument type is `datetime.datetime`.
@@ -242,7 +231,8 @@ class CA:
 
         """
 
-        key = key_type._generate_key()
+        key = encode.PrivIface(key_type).generate()
+
         ski_ext = self._certificate.extensions.get_extension_for_class(
             x509.SubjectKeyIdentifier
         )
@@ -264,8 +254,9 @@ class CA:
             )
             .add_extension(aki, critical=False)
             .add_extension(
-                encode.SAN(emails, hosts, uris),
-                critical=True,
+                san,
+                # EE subjectAltName MUST NOT be critical when subject is nonempty
+                critical=False,
             )
             .add_extension(
                 x509.KeyUsage(
@@ -289,7 +280,7 @@ class CA:
                         ExtendedKeyUsageOID.CODE_SIGNING,
                     ]
                 ),
-                critical=True,
+                critical=False,
             )
             .sign(
                 private_key=self._private_key,
@@ -335,14 +326,19 @@ class LeafCert:
     """
 
     def __init__(
-        self, private_key_pem: bytes, server_cert_pem: bytes, chain_to_ca: List[bytes] = []
+        self, private_key_pem: bytes, ee_cert_pem: bytes, chain_to_ca: List[bytes] = []
     ) -> None:
         self.private_key_pem = Blob(private_key_pem, True)
-        self.cert_chain_pems = [Blob(pem, False) for pem in [server_cert_pem] + chain_to_ca]
+        self.cert_chain_pems = [Blob(pem, False) for pem in [ee_cert_pem] + chain_to_ca]
         self.private_key_and_cert_chain_pem = Blob(
-            private_key_pem + server_cert_pem + b"".join(chain_to_ca),
+            private_key_pem + ee_cert_pem + b"".join(chain_to_ca),
             True
         )
+        self._certificate = x509.load_pem_x509_certificate(ee_cert_pem)
+
+    @property
+    def certificate(self) -> x509.Certificate:
+        return self._certificate
 
     def configure_cert(self, ctx: ssl.SSLContext) -> None:
         """Configure the given context object to present this certificate.

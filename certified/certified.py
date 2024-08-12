@@ -31,7 +31,7 @@ app = typer.Typer()
 
 def write_config(ca : CA, config : Path) -> None:
     ca.cert_pem.write(config / "CA.crt")
-    ca.private_key_pem.write(config / "CA.key")
+    ca.get_private_key().write(config / "CA.key")
 
 @app.command()
 def init(email: Annotated[
