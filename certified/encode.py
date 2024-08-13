@@ -94,14 +94,53 @@ def cert_builder_common(
             )
     )
 
-def name(
+def person_name(
+    given : str,
+    email : str,
+    surname : Optional[str] = None,
+    title : Optional[str] = None,
+    generation : Optional[str] = None,
+    pseudonym : Optional[str] = None,
+    location: Optional[Tuple[str,str,str]] = None,
+) -> x509.Name:
+    """ Build and return an x509.Name suitable for an individual.
+    """
+
+    # Interpret given = "First Last"
+    # and       given = "Last, Fist" patterns.
+    if given.split() == 2 and surname is None:
+        given, surname = given.split()
+        if given[-1] == ",":
+            given, surname = surname, given[:-1]
+
+    name_pieces = [
+        x509.NameAttribute(NameOID.GIVEN_NAME, given),
+        x509.NameAttribute(NameOID.EMAIL_ADDRESS, email)
+    ]
+    if surname:
+        name_pieces.append(x509.NameAttribute(NameOID.SURNAME, surname))
+    if title:
+        name_pieces.append(x509.NameAttribute(NameOID.TITLE, title))
+    if generation:
+        name_pieces.append(x509.NameAttribute(NameOID.GENERATION_QUALIFIER, generation))
+    if pseudonym:
+        name_pieces.append(x509.NameAttribute(NameOID.PSEUDONYM, pseudonym))
+    if location:
+        country, state, city
+        name_pieces.extend([
+            x509.NameAttribute(NameOID.COUNTRY_NAME, location[0]),
+            x509.NameAttribute(NameOID.STATE_OR_PROVINCE_NAME, location[1]),
+            x509.NameAttribute(NameOID.LOCALITY_NAME, location[2]),
+        ])
+    return x509.Name(name_pieces)
+
+def org_name(
     organization_name: str,
     unit: str,
     common_name: Optional[str] = None,
     location: Optional[Tuple[str,str,str]] = None,
 ) -> x509.Name:
-    """
-    Build and return an x509.Name.
+    """ Build and return an x509.Name suitable for an organization.
 
     Args:
        organization_name: Sets the "Organization Name" (O) attribute on the
@@ -122,18 +161,17 @@ def name(
 
     """
 
-    name_pieces = []
-    if location:
-        country, state, city
-        name_pieces += [
-            x509.NameAttribute(NameOID.COUNTRY_NAME, "US"),
-            x509.NameAttribute(NameOID.STATE_OR_PROVINCE_NAME, "California"),
-            x509.NameAttribute(NameOID.LOCALITY_NAME, "San Francisco"),
-        ]
-    name_pieces += [
+    name_pieces = [
         x509.NameAttribute(NameOID.ORGANIZATION_NAME, organization_name),
         x509.NameAttribute(NameOID.ORGANIZATIONAL_UNIT_NAME, unit),
     ]
+    if location:
+        country, state, city
+        name_pieces.extend([
+            x509.NameAttribute(NameOID.COUNTRY_NAME, location[0]),
+            x509.NameAttribute(NameOID.STATE_OR_PROVINCE_NAME, location[1]),
+            x509.NameAttribute(NameOID.LOCALITY_NAME, location[2]),
+        ])
     if common_name is not None:
         name_pieces.append(x509.NameAttribute(NameOID.COMMON_NAME, common_name))
     return x509.Name(name_pieces)

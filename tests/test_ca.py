@@ -18,14 +18,16 @@ def echo_server(sock):
         sock.sendall(msg)
 
 def test_new_ca():
-    name = encode.name("My Company", "My Division", "mycompany.com")
+    name = encode.org_name("My Company", "My Division", "mycompany.com")
     CA.new(name)
 
 def test_cxn():
-    name = encode.name("Test Org.", "Testing Unit")
+    name = encode.org_name("Test Org.", "Testing Unit")
     ca = CA.new(name)
     trust_root = ca.cert_pem.bytes().decode("ascii")
-    cli_cert  = ca.issue_cert(name, encode.SAN(emails=["tim@test.org"]))
+    cli_cert  = ca.issue_cert( encode.person_name("Tim Tester",
+                                                  "tim@test.org"),
+                               encode.SAN(emails=["tim@test.org"]) )
     srv_cert  = ca.issue_cert(name, encode.SAN(hosts=["localhost"]))
 
     """ # to manually debug by calling openssl s_server
@@ -56,7 +58,7 @@ def test_cxn():
                     remote_name=None)
 
 def test_ca():
-    name = encode.name("My Company", "My Division")
+    name = encode.org_name("My Company", "My Division")
     san = encode.SAN(hosts=["example.com"])
     crt = CA.new(name, san, key_type="secp256r1")
     ee = crt.issue_cert(name, san, key_type="secp256r1")

@@ -17,13 +17,9 @@ import certified.layout as layout
 import certified.encode as encode
 from .ca import CA
 
-#from pydantic_core import to_jsonable_python
-#from aiowire import EventLoop, Wire
-#from actor_api.config import Config, TrustedClient, TrustedService, PubKey
 #from actor_api.grant import Grant
 #from actor_api.validation import signGrant, validateGrant
 #from actor_api.crypto import gen_key, gen_keypair, get_verifykey, get_pubkey
-#from actor_api.message import cfgfile, arun
 #from actor_api.actor_test import cli_srv, srv_sign
 #from actor_api.type_alias import str_to_set
 
@@ -34,7 +30,35 @@ def write_config(ca : CA, config : Path) -> None:
     ca.get_private_key().write(config / "CA.key")
 
 @app.command()
-def init(email: Annotated[
+def init(org: Annotated[
+                    Optional[str],
+                    typer.Option(help="Organization Name",
+                        rich_help_panel="""If specified, division must also be present and name cannot be present.
+Example: 'Certificate Lab, Inc.'"
+"""
+                    )
+                ] = None,
+         division: Annotated[
+                    Optional[str],
+                    typer.Option(help="Division",
+                        rich_help_panel="""If specified, org must also be present and name cannot be present.
+Example: 'Computing Directorate'
+"""
+                    )
+                ] = None,
+         name: Annotated[
+                    Optional[str],
+                    typer.Option(help="Person Name (format 'given_name surname')",
+                        rich_help_panel="""If specified, at least one email must be present, and org / division cannot be present.
+Note, only given and surnames are supported, at present.
+
+Examples:
+    - Timothy Tester
+    - Tester, Timothy
+"""
+                    )
+                ] = None,
+         email: Annotated[
                     List[str],
                     typer.Option(help="email addresses",
                         rich_help_panel="Example: example@example.org"
@@ -44,14 +68,14 @@ def init(email: Annotated[
                     List[str],
                     typer.Option(help="host names",
                         rich_help_panel="""Examples:
-     - "*.example.org"
-     - "example.org"
-     - "éxamplë.org"
-     - "xn--xampl-9rat.org"
-     - "127.0.0.1"
-     - "::1"
-     - "10.0.0.0/8"
-     - "2001::/16"
+    - "*.example.org"
+    - "example.org"
+    - "éxamplë.org"
+    - "xn--xampl-9rat.org"
+    - "127.0.0.1"
+    - "::1"
+    - "10.0.0.0/8"
+    - "2001::/16"
 """)
                ] = [],
          uri: Annotated[
@@ -71,9 +95,23 @@ def init(email: Annotated[
         raise FileExistsError(cfg/"CA.key")
     cfg.mkdir(exist_ok=True, parents=True)
 
-    name = encode.name("My Org.", "My Company")
-    san = encode.SAN(email, host, uri)
-    ca = CA.new(name, san)
+    if org or division:
+        assert division, "If org is defined, division must also be defined."
+        assert division, "If division is defined, org must also be defined."
+        assert name is None, "If org is defined, name must not be defined."
+        name = encode.org_name(company, organization)
+    elif name:
+        assert org is None, "If name is defined, org must not be defined."
+        assert division is None, "If name is defined, division must not be defined."
+        assert len(email) > 0, "If name is defined, at least one email must be defined."
+        name = encode.person_name(name, email[0])
+    else:
+        raise AssertionError("No identities provided.")
+    if sum(map(len, [email, host, uri])) > 0:
+        san  = encode.SAN(email, host, uri)
+    else:
+        san = None
+    ca   = CA.new(name, san)
     write_config(ca, cfg)
     print(f"Generated new config at {cfg}.")
     return 0

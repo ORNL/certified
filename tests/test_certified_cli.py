@@ -19,6 +19,12 @@ def test_init(tmp_path):
 
     result = runner.invoke(app, ["init", "--config", str(tmp_path),
                                  "--email", "me@home.org"])
+    assert isinstance(result.exception, AssertionError)
+    assert "No identities" in str(result.exception)
+
+    result = runner.invoke(app, ["init", "--config", str(tmp_path),
+                                 "--name", "Takada, Osamu",
+                                 "--email", "me@home.org"])
     assert result.exit_code == 0
 
     warn, err = check_config(tmp_path)
