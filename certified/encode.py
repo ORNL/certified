@@ -1,7 +1,7 @@
 """ Functionality for generating certificates.
 """
 
-from typing import Optional, List
+from typing import Optional, List, Tuple
 from enum import Enum
 import datetime
 import ipaddress
@@ -9,20 +9,20 @@ import idna
 
 from cryptography.hazmat.primitives.asymmetric import (
     ed448, 
-    ed25519
+    ed25519,
+    ec
 )
 from cryptography.hazmat.primitives.asymmetric.types import (
     CertificatePublicKeyTypes,
     CertificateIssuerPrivateKeyTypes
 )
-#from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives import hashes
 from cryptography.x509.oid import NameOID
 from cryptography import x509
 from cryptography.hazmat.primitives.serialization import (
     Encoding,
     NoEncryption,
     PrivateFormat,
-    load_pem_private_key,
 )
 
 from .blob import *
@@ -33,20 +33,40 @@ __all__ = ["SAN", "name", "PrivIface", "PubIface",
            "CertificatePublicKeyTypes"
           ]
 
+class GenericEC:
+    def __init__(self, instance):
+        self.instance = instance
+    def generate(self):
+        return ec.generate_private_key(self.instance)
+
 def PrivIface(keytype) -> CertificateIssuerPrivateKeyTypes:
     if keytype == "ed25519":
         return ed25519.Ed25519PrivateKey
     elif keytype == "ed448":
         return ed448.Ed448PrivateKey
-    # support P-256?
-    #return ec.generate_private_key(ec.SECP256R1())
+    elif keytype == "secp256r1":
+        return GenericEC(ec.SECP256R1())
+        #return ec.generate_private_key(ec.SECP256R1())
+    elif keytype == "secp384r1":
+        return GenericEC(ec.SECP384R1())
+    elif keytype == "secp521r1":
+        return GenericEC(ec.SECP521R1())
+    elif keytype == "secp256k1":
+        return GenericEC(ec.SECP256K1())
+    raise KeyError(keytype)
+
+def hash_for_key(keytype):
+    if keytype == "ed25519" or keytype == "ed448":
+        return None
+    #return hashes.BLAKE2b(64) # cryptography.exceptions.UnsupportedAlgorithm: Hash algorithm "blake2b" not supported for signatures
+    return hashes.SHA256()
 
 def PubIface(keytype) -> CertificatePublicKeyTypes:
     if keytype == "ed25519":
         return ed25519.Ed25519PublicKey
     elif keytype == "ed448":
         return ed448.Ed448PublicKey
-
+    raise KeyError(keytype)
 
 def cert_builder_common(
         subject: x509.Name,
@@ -78,30 +98,33 @@ def name(
     organization_name: str,
     unit: str,
     common_name: Optional[str] = None,
+    location: Optional[Tuple[str,str,str]] = None,
 ) -> x509.Name:
     """
     Build and return an x509.Name.
 
     Args:
        organization_name: Sets the "Organization Name" (O) attribute on the
-            certificate.
+           certificate.
 
        unit: Sets the "Organization Unit Name" (OU)
-            attribute on the certificate.
+           attribute on the certificate.
     
        common_name: Sets the "Common Name" of the certificate. This is a
-         legacy field that used to be used to check identity. It's an
-         arbitrary string with poorly-defined semantics, so `modern
-         programs are supposed to ignore it
-         <https://developers.google.com/web/updates/2017/03/chrome-58-deprecations#remove_support_for_commonname_matching_in_certificates>`__.
-         But it might be useful if you need to test how your software
-         handles legacy or buggy certificates.
+           legacy field that used to be used to check identity. It's an
+           arbitrary string with poorly-defined semantics, so
+           [modern programs are supposed to ignore it](https://developers.google.com/web/updates/2017/03/chrome-58-deprecations#remove_support_for_commonname_matching_in_certificates).
+           But it might be useful if you need to test how your software
+           handles legacy or buggy certificates.
+
+       location: Optionally a tuple containing:
+           (country_code, state_or_province, city_or_locality)
 
     """
 
     name_pieces = []
-    location = False # FIXME
     if location:
+        country, state, city
         name_pieces += [
             x509.NameAttribute(NameOID.COUNTRY_NAME, "US"),
             x509.NameAttribute(NameOID.STATE_OR_PROVINCE_NAME, "California"),

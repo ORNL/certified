@@ -133,10 +133,15 @@ class Blob:
           dir: Passed to `tempfile.NamedTemporaryFile`.
 
         """
-        with NamedTemporaryFile(suffix=".pem", dir=dir) as f:
-            os.chmod(f.name, 0o600)
-            f.write(self._data)
-            yield f.name
+        with NamedTemporaryFile(suffix=".pem", dir=dir, delete=False) as f:
+            try:
+                os.chmod(f.name, 0o600)
+                f.write(self._data)
+                f.close()
+                yield f.name
+            finally:
+                f.close() # in case chmod() or write() raised an error
+                os.unlink(f.name)
 
 class PublicBlob(Blob):
     def __init__(self, cert : x509) -> None:
@@ -147,10 +152,12 @@ class PrivateBlob(Blob):
         try:
             pkey = key.private_bytes(
                 Encoding.PEM,
-                PrivateFormat.TraditionalOpenSSL,
+                PrivateFormat.PKCS8,
                 NoEncryption())
         except ValueError:
             pkey = key.private_bytes(Encoding.PEM,
-                PrivateFormat.OpenSSH,
+                PrivateFormat.TraditionalOpenSSL,
+                #PrivateFormat.PKCS8,
+                #PrivateFormat.OpenSSH,
                 NoEncryption())
         super().__init__(pkey, True)

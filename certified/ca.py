@@ -10,6 +10,10 @@ from cryptography import x509
 from cryptography.x509.oid import ExtendedKeyUsageOID
 #from cryptography.hazmat.primitives import hashes
 
+from cryptography.hazmat.primitives.serialization import (
+    load_pem_private_key,
+)
+
 from .blob import PublicBlob, PrivateBlob, Blob
 import certified.encode as encode
 from .encode import (
@@ -33,30 +37,28 @@ class CA:
     _certificate: x509.Certificate
     _private_key: CertificateIssuerPrivateKeyTypes
 
-    @classmethod
-    def load(cls, cert_bytes: bytes, private_key_bytes: bytes,
-                  password: Optional[str] = None) -> None:
+    def __init__(self, cert_bytes: bytes, private_key_bytes: bytes,
+                 password: Optional[str] = None) -> None:
         """Load a CA from an existing cert and private key.
 
         Args:
           cert_bytes: The bytes of the certificate in PEM format
           private_key_bytes: The bytes of the private key in PEM format
+          password: used to decrypt the key (if a password was set)
         """
-        ca = cls()
-        #ca.parent_cert = None
-        ca._certificate = x509.load_pem_x509_certificate(cert_bytes)
-        ca._private_key = load_pem_private_key(
+        #self.parent_cert = None
+        self._certificate = x509.load_pem_x509_certificate(cert_bytes)
+        self._private_key = load_pem_private_key(
                     private_key_bytes, password=password
         )
         try:
-            basic = ca._certificate.extensions \
-                      .get_extension_for_class(x509.BasicConstraints)
+            basic = self._certificate.extensions \
+                        .get_extension_for_class(x509.BasicConstraints)
             assert basic.value.ca, "Loaded certificate is not a CA."
             self._path_length = basic.value.path_length
         except x509.ExtensionNotFound:
             raise ValueError("BasicConstraints not found.")
             self._path_length = None
-        return ca
 
     @classmethod
     def new(cls,
@@ -65,7 +67,7 @@ class CA:
         path_length: int = 0,
         key_type : str = "ed25519",
         parent_cert: Optional["CA"] = None,
-    ) -> None:
+    ) -> "CA":
         """ Generate a new CA (root if parent_cert is None)
 
         Args:
@@ -76,15 +78,11 @@ class CA:
           key_type: cryptographic algorithm for key use
           parent_cert: parent who will sign this CA (None = self-sign)
         """
-        self = cls()
-
-        #self.parent_cert = parent_cert
         # Generate our key
-        self._private_key = encode.PrivIface(key_type).generate()
-        self._path_length = path_length
+        private_key = encode.PrivIface(key_type).generate()
 
         issuer = name
-        sign_key = self._private_key
+        sign_key = private_key
         aki: Optional[x509.AuthorityKeyIdentifier]
         if parent_cert is not None:
             sign_key = parent_cert._private_key
@@ -100,7 +98,7 @@ class CA:
             aki = None
 
         cert_builder = cert_builder_common(
-            name, issuer, self._private_key.public_key()
+            name, issuer, private_key.public_key()
         ).add_extension(
             x509.BasicConstraints(ca=True, path_length=path_length),
             critical=True,
@@ -110,7 +108,7 @@ class CA:
         if san:
             cert_builder = cert_builder.add_extension(san, critical=False)
 
-        self._certificate = cert_builder.add_extension(
+        certificate = cert_builder.add_extension(
             x509.KeyUsage(
                 digital_signature=True,  # OCSP
                 content_commitment=False,
@@ -125,10 +123,11 @@ class CA:
             critical=True,
         ).sign(
             private_key=sign_key,
-            algorithm=None
-            #algorithm=hashes.SHA256(),
+            algorithm=encode.hash_for_key(key_type),
         )
-        return self
+        # TODO: lookup this algo for the sign_key type.
+        return cls(PublicBlob(certificate).bytes(),
+                   PrivateBlob(private_key).bytes())
 
     def __str__(self) -> str:
         return str(self.cert_pem)
@@ -163,6 +162,7 @@ class CA:
         SAN = self._certificate.extensions.get_extension_for_class(
                 SubjectAlternativeName
         )
+        # TODO: read key type and call hash_for_key
 
         csr = x509.CertificateSigningRequestBuilder().subject_name(
             self._certificate.subject
@@ -224,7 +224,8 @@ class CA:
             argument type is `datetime.datetime`.
             Defaults to 365 days after `not_before`.
 
-          key_type: Set the type of key that is used for the certificate. By default this is an ed25519 based key.
+          key_type: Set the type of key that is used for the certificate.
+            By default this is an ed25519 based key.
 
         Returns:
           LeafCert: the newly-generated certificate.
@@ -280,12 +281,12 @@ class CA:
                         ExtendedKeyUsageOID.CODE_SIGNING,
                     ]
                 ),
+                # certificate won't verify if this is True (Certificate extension 2.5.29.37 has incorrect criticality)
                 critical=False,
             )
             .sign(
                 private_key=self._private_key,
-                algorithm=None
-                #algorithm=hashes.SHA256(),
+                algorithm=encode.hash_for_key(key_type)
             )
         )
 
@@ -346,15 +347,17 @@ class LeafCert:
         Args:
           ctx: The SSL context to be modified.
         """
+
+        #with self.cert_chain_pems[0].tempfile() as crt:
+        #    with self.private_key_pem.tempfile() as key:
+        #        ctx.load_cert_chain(crt, keyfile=key)
+        #return
         # Currently need a temporary file for this, see:
         #   https://bugs.python.org/issue16487
         with self.private_key_and_cert_chain_pem.tempfile() as path:
-            ctx.load_cert_chain(path)
-
-def new_ca():
-    name = encode.name("My Company", "My Division", "mycompany.com")
-    ca = CA.new(name)
-    return ca
-
-#ca = new_ca()
-#print(ca)
+            try:
+                ctx.load_cert_chain(path)
+            except:
+                #print("Path contents:")
+                #print(self.private_key_and_cert_chain_pem.bytes().decode("ascii"))
+                raise

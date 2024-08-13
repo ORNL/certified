@@ -70,6 +70,10 @@ class CRTDir:
     def __getitem__(self, name):
         return Blob.read(name + ".crt")
 
+    # Note: openssl's -CApath option points to
+    # a directory of these, so we can use that to specify
+    # a directory of trust roots, if available.
+
     #def check(self):
     #    for child in self.base.iterdir():
     #        assert not child.is_dir()

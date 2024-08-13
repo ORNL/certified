@@ -1,0 +1,53 @@
+from typing import Optional
+import ssl
+from functools import wraps
+
+from certified import LeafCert
+
+def ssl_ify(client_or_server : str):
+    is_client = client_or_server == "client"
+    def close(fn):
+        @wraps(fn)
+        def wrap(sock, *args,
+                 cert: LeafCert  = None,
+                 trust_root: str = "",
+                 remote_name: Optional[str]=None):
+            # trust_root should be the ascii-decoded
+            # contents of the trust root's PEM-format
+            # certificate.
+            #
+            # For a full asyncio example, see:
+            # https://gist.github.com/zapstar/a7035795483753f7b71a542559afa83f
+            server_hostname : Optional[str] = None
+            if is_client:
+                server_hostname = remote_name
+                ssl_ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+                ssl_ctx.verify_mode = ssl.VerifyMode.CERT_REQUIRED
+            else:
+                ssl_ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+                ssl_ctx.options |= ssl.OP_SINGLE_DH_USE
+                ssl_ctx.options |= ssl.OP_SINGLE_ECDH_USE
+                ssl_ctx.verify_mode = ssl.VerifyMode.CERT_REQUIRED # mTLS
+            #ssl_ctx.minimum_version = ssl.TLSVersion.TLSv1_2
+            ssl_ctx.minimum_version = ssl.TLSVersion.TLSv1_3
+
+            cert.configure_cert(ssl_ctx) # runs load_cert_chain
+            #ssl_ctx.load_cert_chain('client_cert.pem', keyfile='client_key.pem')
+            ssl_ctx.load_verify_locations(cadata=trust_root)
+
+            if remote_name is None:
+                ssl_ctx.check_hostname = False
+
+            #ssl_ctx.set_ciphers('ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384')
+            with ssl_ctx.wrap_socket(sock,
+                    server_side = not is_client,
+                    server_hostname = server_hostname,
+                    do_handshake_on_connect=False) as ssock:
+                # server_hostname=remote_name
+                print(f"SSL {client_or_server} connecting, version " + str(ssock.version()))
+                ssock.do_handshake()
+                peer = ssock.getpeercert()
+                print(f"SSL Peer = {str(peer)}")
+                return fn(ssock, *args)
+        return wrap
+    return close
