@@ -10,10 +10,18 @@ layout.  See details in [docs/keys](/docs/keys.md).
 
 from typing import Union, Optional, Tuple, List
 import os
+import ssl
 from pathlib import Path
 from functools import cache
+from contextlib import contextmanager
+
+try:
+    import httpx
+except ImportError:
+    httpx = None
 
 from .blob import Blob, is_user_only
+from .wrappers import ssl_context
 
 Pstr = Union[str, "os.PathLike[str]"]
 
@@ -129,3 +137,32 @@ def check_config(base : Path) -> Tuple[List[str], List[str]]:
         gone(base/"CA.crt")
 
     return warnings, errors
+
+class Certified:
+    def __init__(self, certified_config : Optional[Pstr] = None):
+        self.config = config(certified_config)
+
+    def signer(self):
+        return CA.load(self.config / "CA")
+
+    def identity(self):
+        return LeafCert.load(self.config / "0")
+
+    def ssl_context(self, is_client : bool) -> ssl.SSLContext:
+        ctx = ssl_context(is_client)
+        self.identity().configure_cert( ctx )
+        if is_client:
+            ctx.load_verify_locations(capath=self.config/"trusted_servers")
+        else:
+            ctx.load_verify_locations(capath=self.config/"trusted_clients")
+
+    @contextmanager
+    def client(self, prefix):
+        headers = {'user-agent': 'certified-client/0.1.0'}
+        ident = self.identity()
+
+        ssl_ctx = self.ssl_context(is_client = True)
+        with httpx.Client(base_url = srv.base,
+                          headers = headers,
+                          verify = ssl_ctx) as client:
+            yield client

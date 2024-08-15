@@ -6,9 +6,13 @@ theme:
 plugins:
   - mkdocstrings
 
+
 nav:
-  - index.md
-  - tutorials.md
-  - how-to-guides.md
-  - reference.md
-  - explanation.md
+  - Home: index.md
+  - Tutorials: tutorials.md
+  - User Guide:
+    - how-to-guides.md
+  - Reference:
+    - certs.md
+    - "Configuration / Keyfile Layout": keys.md
+  - "Concept Guide": explanation.md

@@ -2,7 +2,20 @@ from typing import Optional
 import ssl
 from functools import wraps
 
-from certified import LeafCert
+from .ca import LeafCert
+
+def ssl_context(is_client : bool) -> ssl.SSLContext:
+    if is_client:
+        ssl_ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+        ssl_ctx.verify_mode = ssl.VerifyMode.CERT_REQUIRED
+    else:
+        ssl_ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        ssl_ctx.options |= ssl.OP_SINGLE_DH_USE
+        ssl_ctx.options |= ssl.OP_SINGLE_ECDH_USE
+        ssl_ctx.verify_mode = ssl.VerifyMode.CERT_REQUIRED # mTLS
+    #ssl_ctx.minimum_version = ssl.TLSVersion.TLSv1_2
+    ssl_ctx.minimum_version = ssl.TLSVersion.TLSv1_3
+    return ssl_ctx
 
 def ssl_ify(client_or_server : str):
     is_client = client_or_server == "client"
@@ -18,18 +31,12 @@ def ssl_ify(client_or_server : str):
             #
             # For a full asyncio example, see:
             # https://gist.github.com/zapstar/a7035795483753f7b71a542559afa83f
+
+            ssl_ctx = ssl_context(is_client)
+
             server_hostname : Optional[str] = None
             if is_client:
                 server_hostname = remote_name
-                ssl_ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
-                ssl_ctx.verify_mode = ssl.VerifyMode.CERT_REQUIRED
-            else:
-                ssl_ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
-                ssl_ctx.options |= ssl.OP_SINGLE_DH_USE
-                ssl_ctx.options |= ssl.OP_SINGLE_ECDH_USE
-                ssl_ctx.verify_mode = ssl.VerifyMode.CERT_REQUIRED # mTLS
-            #ssl_ctx.minimum_version = ssl.TLSVersion.TLSv1_2
-            ssl_ctx.minimum_version = ssl.TLSVersion.TLSv1_3
 
             cert.configure_cert(ssl_ctx) # runs load_cert_chain
             #ssl_ctx.load_cert_chain('client_cert.pem', keyfile='client_key.pem')
