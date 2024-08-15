@@ -21,8 +21,6 @@ want a signature from.
     * 0.key, 0.crt   -- end-entity identification key for
                         establishing TLS connections and encryption
 
-    * 1.key, 1.crt   -- may be multiple end-entity IDs
-
     * Since each certificate can be signed by others,
       one subdirectory (named after each certificate)
       holds signatures for that key from other authorities.
@@ -52,8 +50,8 @@ want a signature from.
 
     * Adding a certificate for a certificate authority
       to this directory provides a way to indirectly grant
-      access to clients --
-      by validating they have a signature from this certificate authority.
+      access to clients -- by validating they have a
+      signature from this certificate authority.
 
 
     Note: It's unclear what to do about certificatePolicies

@@ -12,14 +12,16 @@ We make the following design choices:
   (e.g. admin) by including it within their 'certificatePolicies'
   *at the handshake* phase
 
-* cookies - we rely on the [datalog model of biscuits](https://doc.biscuitsec.org/reference/datalog)
+* tokens/cookies - we rely on the [datalog model of biscuits](https://doc.biscuitsec.org/reference/datalog)
   to exchange cookies that carry authorization proofs.
-  Because Certified warehouses certificates 
+  Tokens, not certificates are used to delegate authorization.
+  This makes use of [scitokens](https://scitokens.org/).
 
-* symmetry - symmetric ideas are used for setting up client and server
-  cryptographic trust and certificate issuance.  This allows
-  servers to act as clients in complex workflows, and clients
-  to act as servers to run callbacks.
+* symmetry - symmetric ideas are used for setting up
+  mutual identity verification (authentication) between
+  client and server.  This allows servers to act as clients
+  in complex workflows, and clients to act as servers
+  to run callbacks.
 
 * key management - we prescribe a file layout for these.
   Key file-names serve as a short-hand for referencing a
@@ -99,8 +101,9 @@ https://superuser.com/questions/947061/openssl-unable-to-find-distinguished-name
 
 ## More on JWT/cookies/macaroons/biscuits
 
+[scitokens proposal]: https://scitokens.org/scitokens-proposal-public.pdf
+
+[scitokens presentation]: https://scitokens.org/presentations/SciTokens-GDB-Oct-2017.pdf
+
 [Indigo IAM JWT profiles]: https://indigo-iam.github.io/v/v1.9.0/docs/reference/configuration/jwt-profiles/
-
-
-
 

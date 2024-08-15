@@ -23,7 +23,7 @@ def test_init(tmp_path):
     assert "No identities" in str(result.exception)
 
     result = runner.invoke(app, ["init", "--config", str(tmp_path),
-                                 "--name", "Takada, Osamu",
+                                 "Takada, Osamu",
                                  "--email", "me@home.org"])
     assert result.exit_code == 0
 
@@ -32,6 +32,7 @@ def test_init(tmp_path):
     assert len(err) == 0
 
     result = runner.invoke(app, ["init", "--config", str(tmp_path),
+                                 "Takeda, Osamu",
                                  "--email", "me@home.org"])
     assert result.exit_code == 1
     assert isinstance(result.exception, FileExistsError)

@@ -1,6 +1,6 @@
 # Command-line interface to certified
 
-import os, sys
+import os, sys, shutil
 import importlib
 import asyncio
 from datetime import datetime, timedelta
@@ -25,48 +25,13 @@ from .ca import CA
 
 app = typer.Typer()
 
-def write_config(ca : CA, config : Path) -> None:
-    ca.cert_pem.write(config / "CA.crt")
-    ca.get_private_key().write(config / "CA.key")
 
-@app.command()
-def init(org: Annotated[
-                    Optional[str],
-                    typer.Option(help="Organization Name",
-                        rich_help_panel="""If specified, division must also be present and name cannot be present.
-Example: 'Certificate Lab, Inc.'"
-"""
-                    )
-                ] = None,
-         division: Annotated[
-                    Optional[str],
-                    typer.Option(help="Division",
-                        rich_help_panel="""If specified, org must also be present and name cannot be present.
-Example: 'Computing Directorate'
-"""
-                    )
-                ] = None,
-         name: Annotated[
-                    Optional[str],
-                    typer.Option(help="Person Name (format 'given_name surname')",
-                        rich_help_panel="""If specified, at least one email must be present, and org / division cannot be present.
-Note, only given and surnames are supported, at present.
-
-Examples:
-    - Timothy Tester
-    - Tester, Timothy
-"""
-                    )
-                ] = None,
-         email: Annotated[
-                    List[str],
-                    typer.Option(help="email addresses",
+Email = Annotated[ List[str],
+                   typer.Option(help="email addresses",
                         rich_help_panel="Example: example@example.org"
-                    )
-                ] = [],
-         host: Annotated[
-                    List[str],
-                    typer.Option(help="host names",
+                 ) ]
+Hostname = Annotated[ List[str],
+                      typer.Option(help="host names",
                         rich_help_panel="""Examples:
     - "*.example.org"
     - "example.org"
@@ -76,25 +41,52 @@ Examples:
     - "::1"
     - "10.0.0.0/8"
     - "2001::/16"
-""")
-               ] = [],
-         uri: Annotated[
-                    List[str],
-                    typer.Option(help="uniform resource identifiers",
+""") ]
+URI = Annotated[ List[str],
+                 typer.Option(help="uniform resource identifiers",
                         rich_help_panel="Example: https://datatracker.ietf.org/doc/html/rfc3986#section-1.1.2"
-                    )
-               ] = [],
-         overwrite: bool = typer.Option(False, help="Overwrite existing config."),
-         config : Optional[Path] = typer.Option(None, help="Config file path [default $VIRTUAL_ENV/etc/certified].")):
+               ) ]
+Config = Annotated[Optional[Path], typer.Option(
+                        help="Config file path [default $VIRTUAL_ENV/etc/certified].") ]
+
+@app.command()
+def init(name: Annotated[
+                    Optional[str],
+                    typer.Argument(help="Person Name (format 'given_name surname')",
+                        rich_help_panel="""If specified, at least one email must be present, and org / division cannot be present.
+Note, only given and surnames are supported, at present.
+
+Examples:
+    - Timothy Tester
+    - Tester, Timothy
+""")
+                ] = None,
+         org: Annotated[
+                    Optional[str],
+                    typer.Option(help="Organization Name",
+                        rich_help_panel="""If specified, division must also be present and name cannot be present.
+Example: 'Certificate Lab, Inc.'"
+""")
+                ] = None,
+         division: Annotated[
+                    Optional[str],
+                    typer.Option(help="Division",
+                        rich_help_panel="""If specified, org must also be present and name cannot be present.
+Example: 'Computing Directorate'
+""")
+                ] = None,
+         email: Email = [],
+         host: Hostname = [],
+         uri: URI = [],
+         overwrite: Annotated[bool, typer.Option(
+                        help="Overwrite existing config.")
+                    ] = False,
+         config : Config = None):
     """
-    Create a new config file for the user.
+    Create a new signing and end-entity ID.
     """
 
-    cfg = layout.config(config, should_exist=overwrite)
-    if not overwrite and (cfg/"CA.key").exists():
-        raise FileExistsError(cfg/"CA.key")
-    cfg.mkdir(exist_ok=True, parents=True)
-
+    # Validate arguments
     if org or division:
         assert division, "If org is defined, division must also be defined."
         assert division, "If division is defined, org must also be defined."
@@ -111,21 +103,39 @@ Examples:
         san  = encode.SAN(email, host, uri)
     else:
         san = None
+
+    # Create a new CA
     ca   = CA.new(name, san)
-    write_config(ca, cfg)
+    ident = ca.issue_cert(name, san)
+
+    cfg = layout.config(config, should_exist=overwrite)
+    if overwrite: # remove existing config!
+        shutil.rmtree(cfg)
+    else:
+        try:
+            cfg.rmdir() # only succeeds if dir. is empty
+        except FileNotFoundError: # not created yet - OK
+            pass
+        except OSError:
+            raise FileExistsError(cfg)
+    cfg.mkdir(exist_ok=True, parents=True)
+
+    ca.save(cfg / "CA", False)
+    ident.save(cfg / "0", False)
     print(f"Generated new config at {cfg}.")
     return 0
 
 @app.command()
-def new(name : str = typer.Argument(..., help="Server's network identity."),
+def new(host : Hostname = [],
         url : str = typer.Argument(..., help="Server's listening URL."),
         my_scopes : str = typer.Argument("", help="Whitespace-separated list of scopes that the creator will be configured with by default."),
         config : Optional[Path] = typer.Option(None, help="Config file path [default ~/.config/actors.json].")):
     """
-    Create a new actor and add it to the self-config file
-    with self as a trusted client.
+    Create a new identity and add it as a trusted server:
 
-    The server's config is output to stdout.
+      - it will appear in {config}/trusted_servers
+      - your `CA.crt` will appear in {server}/trusted_clients/origin.crt
+      - your listed scopes will appear next to that file as `origin.scope`
     """
 
     scopes = str_to_set(my_scopes)
@@ -153,9 +163,7 @@ def grant(entity : str = typer.Argument(..., help="Grantee's name."),
           hours  : float = typer.Option(10.0, help="Hours until expiration."),
           config : Optional[Path] = typer.Option(None, help="Config file path [default ~/.config/actors.json].")):
     """
-    Create a signed grant and print to stdout.
-
-    The result is suitable to add to a "Config.grants" dict.
+    Sign a token and print it to stdout.
     """
     config = cfgfile(config)
     cfg = Config.model_validate_json(open(config).read())
@@ -180,8 +188,6 @@ def pubkey(
           config : Optional[Path] = typer.Option(None, help="Config file path [default ~/.config/actors.json].")):
     """
     Print out the public key that corresponds to this config.
-
-    The result is suitable to add to a "Config.services" dict.
     """
     config = cfgfile(config)
     cfg = Config.model_validate_json(open(config).read())

@@ -2,7 +2,7 @@
 
 TODO - should be just:
 
-    certified init name@my.org
+    certified init 'First Last' --email name@my.org
 
 Generate a root certificate:
     python3 new_ca.py

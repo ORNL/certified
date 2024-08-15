@@ -2,7 +2,7 @@
     and leaf certificates (LeafCert)
 """
 
-from typing import Optional, List
+from typing import Optional, List, Callable
 import datetime
 import ssl
 
@@ -14,17 +14,96 @@ from cryptography.hazmat.primitives.serialization import (
     load_pem_private_key,
 )
 
-from .blob import PublicBlob, PrivateBlob, Blob
+from .blob import PublicBlob, PrivateBlob, Blob, Pstr
 import certified.encode as encode
 from .encode import (
     CertificateIssuerPrivateKeyTypes,
     cert_builder_common,
 )
 
-class CA:
-    """ A certificate plus a private key.
+class FullCert:
+    """ A full certificate contains both a certificate and private key.
+    """
+    _certificate: x509.Certificate
+    _private_key: CertificateIssuerPrivateKeyTypes
 
-        CA-s are used only to sign other certificates.
+    def __init__(self, cert_bytes: bytes, private_key_bytes: bytes,
+                 get_pw: Optional[Callable[(), str]] = None) -> None:
+        """Create from an existing cert and private key.
+
+        Args:
+          cert_bytes: The bytes of the certificate in PEM format
+          private_key_bytes: The bytes of the private key in PEM format
+          get_pw: get the password used to decrypt the key (if a password was set)
+        """
+        #self.parent_cert = None
+        self._certificate = x509.load_pem_x509_certificate(cert_bytes)
+        password : Optional[str] = None
+        if get_pw:
+            password = get_pw()
+        self._private_key = load_pem_private_key(
+                    private_key_bytes, password=password
+        )
+
+    @classmethod
+    def load(cls, base : Pstr, get_pw = None):
+        cert = Blob.read(str(base) + ".crt")
+        key  = Blob.read(str(base) + ".key")
+        assert key.is_secret, f"{base+'.key'} has compromised file permissions."
+        return cls(cert.bytes(), key.bytes(), get_pw)
+    
+    def save(self, base : Pstr, overwrite = False):
+        self.cert_pem.write(str(base) + ".crt")
+        self._get_private_key().write(str(base) + ".key")
+
+    @property
+    def certificate(self) -> x509.Certificate:
+        return self._certificate
+
+    @property
+    def cert_pem(self) -> PublicBlob:
+        """`Blob`: The PEM-encoded certificate for this CA. Add this to your
+        trust store to trust this CA."""
+        return PublicBlob(self._certificate)
+
+    def _get_private_key(self) -> PrivateBlob:
+        """`PrivateBlob`: The PEM-encoded private key.
+           You should avoid using this if possible.
+        """
+        return PrivateBlob(self._private_key)
+
+    def __str__(self) -> str:
+        return str(self.cert_pem)
+
+    def create_csr(self) -> PublicBlob:
+        """ Generate a CSR.
+        """
+        # parsing x509
+        # crt.extensions.get_extension_for_class(
+        #        x509.SubjectKeyIdentifier
+        #    )
+        #    sign_key = parent_cert._private_key
+        #    parent_certificate = parent_cert._certificate
+        #    issuer = parent_certificate.subject
+        SAN = self._certificate.extensions.get_extension_for_class(
+                SubjectAlternativeName
+        )
+        # TODO: read key type and call hash_for_key
+
+        csr = x509.CertificateSigningRequestBuilder().subject_name(
+            self._certificate.subject
+        ).add_extension(
+            SAN.value,
+            critical=SAN.critical,
+        ).sign(self._private_key) #, hashes.SHA256())
+        return PublicBlob(csr)
+
+    def revoke(self) -> None:
+        # https://cryptography.io/en/latest/x509/reference/#x-509-certificate-revocation-list-builder
+        raise RuntimeError("FIXME: Not implemented.")
+
+class CA(FullCert):
+    """ CA-s are used only to sign other certificates.
         This design is required if one wants to use keys
         for either signing or key derivation, but not both.
 
@@ -34,23 +113,16 @@ class CA:
         Instead, users should generate separate signing and ECDH keys.
     """
 
-    _certificate: x509.Certificate
-    _private_key: CertificateIssuerPrivateKeyTypes
-
     def __init__(self, cert_bytes: bytes, private_key_bytes: bytes,
-                 password: Optional[str] = None) -> None:
+                 get_pw: Optional[Callable[(), str]] = None) -> None:
         """Load a CA from an existing cert and private key.
 
         Args:
           cert_bytes: The bytes of the certificate in PEM format
           private_key_bytes: The bytes of the private key in PEM format
-          password: used to decrypt the key (if a password was set)
+          get_pw: called to get the password to decrypt the key (if a password was set)
         """
-        #self.parent_cert = None
-        self._certificate = x509.load_pem_x509_certificate(cert_bytes)
-        self._private_key = load_pem_private_key(
-                    private_key_bytes, password=password
-        )
+        super().__init__(cert_bytes, private_key_bytes, get_pw)
         try:
             basic = self._certificate.extensions \
                         .get_extension_for_class(x509.BasicConstraints)
@@ -128,53 +200,6 @@ class CA:
         # TODO: lookup this algo for the sign_key type.
         return cls(PublicBlob(certificate).bytes(),
                    PrivateBlob(private_key).bytes())
-
-    def __str__(self) -> str:
-        return str(self.cert_pem)
-
-    @property
-    def certificate(self) -> x509.Certificate:
-        return self._certificate
-
-    @property
-    def cert_pem(self) -> PublicBlob:
-        """`Blob`: The PEM-encoded certificate for this CA. Add this to your
-        trust store to trust this CA."""
-        return PublicBlob(self._certificate)
-
-    # this gets written to pytest error
-    # messages if @property is used
-    def get_private_key(self) -> PrivateBlob:
-        """`Blob`: The PEM-encoded private key for this CA. Use this to sign
-        other certificates from this CA."""
-        return PrivateBlob(self._private_key)
-
-    def create_csr(self) -> PublicBlob:
-        """ Generate a CSR.
-        """
-        # parsing x509
-        # crt.extensions.get_extension_for_class(
-        #        x509.SubjectKeyIdentifier
-        #    )
-        #    sign_key = parent_cert._private_key
-        #    parent_certificate = parent_cert._certificate
-        #    issuer = parent_certificate.subject
-        SAN = self._certificate.extensions.get_extension_for_class(
-                SubjectAlternativeName
-        )
-        # TODO: read key type and call hash_for_key
-
-        csr = x509.CertificateSigningRequestBuilder().subject_name(
-            self._certificate.subject
-        ).add_extension(
-            SAN.value,
-            critical=SAN.critical,
-        ).sign(self._private_key) #, hashes.SHA256())
-        return PublicBlob(csr)
-
-    def revoke(self) -> None:
-        # https://cryptography.io/en/latest/x509/reference/#x-509-certificate-revocation-list-builder
-        raise RuntimeError("FIXME: Not implemented.")
 
     def create_child_ca(self, name : x509.Name,
                               key_type: str = "ed25519") -> "CA":
@@ -291,8 +316,8 @@ class CA:
         )
 
         return LeafCert(
-            PrivateBlob(key).bytes(),
-            PublicBlob(cert).bytes()
+            PublicBlob(cert).bytes(),
+            PrivateBlob(key).bytes()
         )
 
     def configure_trust(self, ctx: ssl.SSLContext) -> None:
@@ -306,16 +331,13 @@ class CA:
         ctx.load_verify_locations(cadata=self.cert_pem.bytes().decode("ascii"))
 
 
-class LeafCert:
+class LeafCert(FullCert):
     """A server or client certificate plus private key.
 
     Leaf certificates are used to authenticate parties in
     a TLS session.
 
     Attributes:
-      private_key_pem (`PrivateBlob`): The PEM-encoded private key corresponding to
-          this certificate.
-
       cert_chain_pems (list of `Blob` objects): The zeroth entry in this list
           is the actual PEM-encoded certificate, and any entries after that
           are the rest of the certificate chain needed to reach the root CA.
@@ -326,20 +348,20 @@ class LeafCert:
 
     """
 
-    def __init__(
-        self, private_key_pem: bytes, ee_cert_pem: bytes, chain_to_ca: List[bytes] = []
+    def __init__(self,
+            cert_bytes: bytes,
+            private_key_bytes: bytes,
+            get_pw: Optional[Callable[(), str]] = None,
+            chain_to_ca: List[bytes] = []
     ) -> None:
-        self.private_key_pem = Blob(private_key_pem, True)
-        self.cert_chain_pems = [Blob(pem, False) for pem in [ee_cert_pem] + chain_to_ca]
-        self.private_key_and_cert_chain_pem = Blob(
-            private_key_pem + ee_cert_pem + b"".join(chain_to_ca),
-            True
-        )
-        self._certificate = x509.load_pem_x509_certificate(ee_cert_pem)
+        super().__init__(cert_bytes, private_key_bytes, get_pw)
 
-    @property
-    def certificate(self) -> x509.Certificate:
-        return self._certificate
+        self.cert_chain_pems = [Blob(pem, is_secret=False) \
+                                for pem in [cert_bytes] + chain_to_ca]
+        self.private_key_and_cert_chain_pem = Blob(
+            private_key_bytes + cert_bytes + b"".join(chain_to_ca),
+            is_secret=True
+        )
 
     def configure_cert(self, ctx: ssl.SSLContext) -> None:
         """Configure the given context object to present this certificate.
