@@ -5,7 +5,7 @@ import time
 import httpx
 
 from certified.test import child_process
-from certified import Identity, encode
+from certified import Certified, encode
 
 async def app(scope, receive, send):
     print(f"scope: " + str(scope))
@@ -26,13 +26,16 @@ def test_start(tmp_path):
     name = encode.org_name("My Company", "My Division", "mycompany.com")
     san  = encode.SAN(hosts=["localhost", "127.0.0.1"])
 
-    cert = Identity.new(name, san, tmp_path)
-    with pytest.raises(AssertionError):
+    cert = Certified.new(name, san, tmp_path)
+    with pytest.raises(ValueError):
         cert.serve(app, "127.0.0.1:5001")
     with pytest.raises(ValueError):
         cert.serve(app, "tcp://127.0.0.1")
-    with child_process(cert.serve, app, "tcp://127.0.0.1:5002"):
+    with pytest.raises(AssertionError):
+        cert.serve(app, "https://127.0.0.1")
+    with child_process(cert.serve, app, "https://127.0.0.1:5002"):
         connected = False
+        returned = False
         for i in range(200):
             time.sleep(0.01)
             try:
@@ -40,6 +43,7 @@ def test_start(tmp_path):
                     connected = True
                     r = cl.get("/test_path")
                     print("Get returns.")
+                returned = True
                 assert r.status_code == 200
                 print(r.text())
                 break
@@ -47,4 +51,5 @@ def test_start(tmp_path):
             #    break
             except httpx.ConnectError:
                 continue
-        assert connected, "No connection succeeded in 2 sec."
+        assert connected, "Connection did not succeed."
+        assert returned,  "No response returned by server."

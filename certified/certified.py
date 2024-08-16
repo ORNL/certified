@@ -13,7 +13,7 @@ _logger = logging.getLogger(__name__)
 
 import typer
 
-import certified.layout as layout
+from certified import Certified
 import certified.encode as encode
 from .ca import CA
 
@@ -91,7 +91,7 @@ Example: 'Computing Directorate'
         assert division, "If org is defined, division must also be defined."
         assert division, "If division is defined, org must also be defined."
         assert name is None, "If org is defined, name must not be defined."
-        name = encode.org_name(company, organization)
+        name = encode.org_name(org, division)
     elif name:
         assert org is None, "If name is defined, org must not be defined."
         assert division is None, "If name is defined, division must not be defined."
@@ -102,27 +102,10 @@ Example: 'Computing Directorate'
     if sum(map(len, [email, host, uri])) > 0:
         san  = encode.SAN(email, host, uri)
     else:
-        san = None
+        raise ValueError("Host, Email, or URI must also be provided.")
 
-    # Create a new CA
-    ca   = CA.new(name, san)
-    ident = ca.issue_cert(name, san)
-
-    cfg = layout.config(config, should_exist=overwrite)
-    if overwrite: # remove existing config!
-        shutil.rmtree(cfg)
-    else:
-        try:
-            cfg.rmdir() # only succeeds if dir. is empty
-        except FileNotFoundError: # not created yet - OK
-            pass
-        except OSError:
-            raise FileExistsError(cfg)
-    cfg.mkdir(exist_ok=True, parents=True)
-
-    ca.save(cfg / "CA", False)
-    ident.save(cfg / "0", False)
-    print(f"Generated new config at {cfg}.")
+    cert = Certified.new(name, san, config, overwrite)
+    print(f"Generated new config at {cert.config}.")
     return 0
 
 @app.command()
@@ -133,8 +116,8 @@ def new(host : Hostname = [],
     """
     Create a new identity and add it as a trusted server:
 
-      - it will appear in {config}/trusted_servers
-      - your `CA.crt` will appear in {server}/trusted_clients/origin.crt
+      - it will appear in {config}/known_servers
+      - your `CA.crt` will appear in {server}/known_clients/origin.crt
       - your listed scopes will appear next to that file as `origin.scope`
     """
 
@@ -155,6 +138,10 @@ def new(host : Hostname = [],
 
     # save the user's modified config.
     write_config(config, cfg)
+
+def introduce():
+    # TODO
+    pass
 
 @app.command()
 def grant(entity : str = typer.Argument(..., help="Grantee's name."),
@@ -191,7 +178,7 @@ def pubkey(
     """
     config = cfgfile(config)
     cfg = Config.model_validate_json(open(config).read())
-    svc = TrustedService(
+    svc = KnownService(
             url = cfg.listen or '',
             pubkey = get_pubkey(cfg.privkey),
             auths = set(cfg.validators.keys()),
@@ -210,7 +197,7 @@ def verifykey(
     """
     config = cfgfile(config)
     cfg = Config.model_validate_json(open(config).read())
-    svc = TrustedService(
+    svc = KnownService(
             url = cfg.listen or '',
             pubkey = get_verifykey(cfg.privkey),
             auths = set(cfg.validators.keys()),
@@ -252,13 +239,6 @@ def run(actor : str = typer.Argument(..., help="actor's python module (specified
     if not isinstance(state, Wire):
         raise TypeError("Module does not define a runnable actor.")
 
-    if "docs" not in state.calls:
-        _logger.info("Note: you can add a docs() call to your API by writing\n"
-                "    @app.call()\n"
-                "    def docs() -> str:\n"
-                "        return app.docs()"
-                )
-
     state.config = cfg # type: ignore[attr-defined]
     if max_queries is not None:
         state.remaining_queries = max_queries # type: ignore[attr-defined]
@@ -266,6 +246,9 @@ def run(actor : str = typer.Argument(..., help="actor's python module (specified
     _logger.info("Running %s:%s", mod_name, state_name)
     asyncio.run( state )
     _logger.info("Exited %s:%s", mod_name, state_name)
+
+# TODO: list out identities (and key types) of all known clients or servers
+# TODO: print logs of all successful and unsuccessful authentications
 
 if __name__ == "__main__":
     app()

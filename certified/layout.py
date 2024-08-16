@@ -8,12 +8,16 @@ The configuration uses a $HOME/.ssh directory-style
 layout.  See details in [docs/keys](/docs/keys.md).
 """
 
-from typing import Union, Optional, Tuple, List
+from typing import Union, Optional, Tuple, List, Any, Callable
 import os
+import shutil
+from urllib.parse import urlparse
 import ssl
 from pathlib import Path
 from functools import cache
 from contextlib import contextmanager
+
+from cryptography import x509
 
 try:
     import httpx
@@ -22,8 +26,41 @@ except ImportError:
 
 from .blob import Blob, is_user_only
 from .wrappers import ssl_context
+from .ca import CA, LeafCert
 
+PWCallback = Callable[(), str]
 Pstr = Union[str, "os.PathLike[str]"]
+
+def fixed_ssl_context(
+    certfile: str | os.PathLike[str],
+    keyfile: str | os.PathLike[str] | None,
+    password,
+    ssl_version: int,
+    cert_reqs: int,
+    ca_certs: str | os.PathLike[str] | None,
+    ciphers: str | None,
+) -> ssl.SSLContext:
+    ctx = ssl_context(is_client = False)
+    #ctx.verify_mode = ssl.VerifyMode(cert_reqs) # already required by (our) default
+
+    if ciphers:
+        ctx.set_ciphers(ciphers)
+
+    ctx.load_cert_chain(certfile, keyfile, password)
+    if ca_certs:
+        if not Path(ca_certs).exists():
+            ctx.load_verify_locations(cadata=ca_certs)
+        elif Path(ca_certs).is_dir():
+            ctx.load_verify_locations(capath=ca_certs)
+        else:
+            ctx.load_verify_locations(cafile=ca_certs)
+    return ctx
+
+try:
+    import uvicorn
+    uvicorn.config.create_ssl_context = fixed_ssl_context
+except ImportError:
+    uvicorn = None
 
 @cache
 def config(certified_config : Optional[Pstr] = None,
@@ -135,6 +172,21 @@ def check_config(base : Path) -> Tuple[List[str], List[str]]:
         error(f"Invalid key file permissions on {key}!")
     if not (base/"CA.crt").is_file():
         gone(base/"CA.crt")
+    if not (base/"known_clients").is_dir():
+        gone(base/"known_clients")
+    if not (base/"known_servers").is_dir():
+        gone(base/"known_servers")
+
+    fca = base / "CA.crt"
+    CA = Blob.read(fca)
+    for fself in [ base/"known_servers"/"self.crt"
+                 , base/"known_clients"/"self.crt" ]:
+        if fself.is_file():
+            stest = Blob.read(fself)
+            if CA.bytes() != stest.bytes():
+                warn(f"{fself} does not match {fca}")
+        else:
+            warn(f"{fself} does not exist.")
 
     return warnings, errors
 
@@ -152,17 +204,78 @@ class Certified:
         ctx = ssl_context(is_client)
         self.identity().configure_cert( ctx )
         if is_client:
-            ctx.load_verify_locations(capath=self.config/"trusted_servers")
+            ctx.load_verify_locations(capath=self.config/"known_servers")
         else:
-            ctx.load_verify_locations(capath=self.config/"trusted_clients")
+            ctx.load_verify_locations(capath=self.config/"known_clients")
+        return ctx
+
+    @classmethod
+    def new(cls,
+            name : x509.Name,
+            san : x509.SubjectAlternativeName,
+            certified_config : Optional[Pstr] = None,
+            overwrite : bool = False,
+           ) -> "Certified":
+        # Create a new CA and identity certificate
+        ca    = CA.new(name, san)
+        ident = ca.issue_cert(name, san)
+
+        cfg = config(certified_config, should_exist=overwrite)
+        if overwrite: # remove existing config!
+            shutil.rmtree(cfg)
+        else:
+            try:
+                cfg.rmdir() # only succeeds if dir. is empty
+            except FileNotFoundError: # not created yet - OK
+                pass
+            except OSError:
+                raise FileExistsError(cfg)
+        cfg.mkdir(exist_ok=True, parents=True)
+
+        ca.save(cfg / "CA", False)
+        ident.save(cfg / "0", False)
+
+        (cfg/"known_servers").mkdir()
+        (cfg/"known_clients").mkdir()
+        shutil.copy(cfg/"CA.crt", cfg/"known_servers"/"self.crt")
+        shutil.copy(cfg/"CA.crt", cfg/"known_clients"/"self.crt")
+        return cls(cfg)
 
     @contextmanager
-    def client(self, prefix):
+    def Client(self, prefix):
+        cfg = self.config
         headers = {'user-agent': 'certified-client/0.1.0'}
         ident = self.identity()
 
+        assert httpx is not None, "httpx is not available."
+
         ssl_ctx = self.ssl_context(is_client = True)
-        with httpx.Client(base_url = srv.base,
+        with httpx.Client(base_url = prefix,
                           headers = headers,
                           verify = ssl_ctx) as client:
             yield client
+
+    def serve(self,
+              app : Any,
+              url_str : str,
+              get_passwd : PWCallback = None) -> None:
+        cfg = self.config
+        url = urlparse(url_str)
+
+        if url.scheme == "https":
+            assert url.hostname is not None, "URL must define a hostname."
+            assert url.port is not None, "URL must define a port."
+            assert uvicorn is not None, "uvicorn is not available."
+
+            uvicorn.run(app,
+                        host=url.hostname,
+                        port=url.port,
+                        log_level="info",
+                        ssl_cert_reqs=ssl.VerifyMode.CERT_REQUIRED,
+                        ssl_ca_certs=cfg/"known_clients",
+                        ssl_certfile=cfg/"0.crt",
+                        ssl_keyfile=cfg/"0.key",
+                        ssl_keyfile_password=get_passwd,
+                        http="h11")
+        else:
+            raise ValueError(f"Unsupported URL scheme: {url.scheme}")

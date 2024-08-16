@@ -141,6 +141,6 @@ We actually implement this internally with uvicorn's
     import certified
 
     cert = certified.Config.load()
-    cert.serve("my_api.server:app")
+    cert.serve("my_api.server:app", "https://127.0.0.1:5000")
 
     # ... calls uvicorn.run("my_api.server:app", host="127.0.0.1", port=5000, log_level="info")

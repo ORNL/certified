@@ -68,7 +68,7 @@ class CA(FullCert):
 
         issuer = name
         sign_key = private_key
-        aki: Optional[x509.AuthorityKeyIdentifier]
+        aki: Optional[x509.AuthorityKeyIdentifier] = None
         if parent_cert is not None:
             sign_key = parent_cert._private_key
             parent_certificate = parent_cert._certificate
@@ -79,8 +79,6 @@ class CA(FullCert):
             aki = x509.AuthorityKeyIdentifier.from_issuer_subject_key_identifier(
                 ski_ext.value
             )
-        else:
-            aki = None
 
         cert_builder = cert_builder_common(
             name, issuer, private_key.public_key()
@@ -178,6 +176,10 @@ class CA(FullCert):
         aki = x509.AuthorityKeyIdentifier.from_issuer_subject_key_identifier(
             ski_ext.value
         )
+        # if SKI isn't available,
+        #aki = x509.AuthorityKeyIdentifier.from_issuer_public_key(
+        #        self._certificate.public_key()
+        #)
 
         cert = (
             cert_builder_common(

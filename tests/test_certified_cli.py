@@ -36,3 +36,17 @@ def test_init(tmp_path):
                                  "--email", "me@home.org"])
     assert result.exit_code == 1
     assert isinstance(result.exception, FileExistsError)
+
+    result = runner.invoke(app, ["init", "--config", str(tmp_path),
+                                 "--org", "Fictitious Organization",
+                                 "--division", "Fraud Detection",
+                                 "--host", "localhost",
+                                 "--overwrite"])
+    assert result.exit_code == 0
+
+    result = runner.invoke(app, ["init", "--config", str(tmp_path),
+                                 "--org", "Fictitious Organization",
+                                 "--division", "Fraud Detection",
+                                 "--overwrite"])
+    assert result.exit_code == 1
+    assert isinstance(result.exception, ValueError)

@@ -4,7 +4,23 @@ import signal
 from contextlib import contextmanager
 
 @contextmanager
-def child_server(server):
+def child_process(fn, *args, **kws):
+    """ Create a child process and run fn.
+
+        After context completes, the child
+        process is sent a SIGTERM.
+    """
+    child_pid = os.fork()
+    if child_pid: # parent process yields
+       try:
+           yield
+       finally:
+           os.kill(child_pid, signal.SIGTERM)
+    else: # child process
+       fn( *args, **kws)
+
+@contextmanager
+def child_server(server, *args, **kws):
     """ Create a UNIX socket and run the server
         in a child process.
 
@@ -22,17 +38,11 @@ def child_server(server):
     """
     c, s = socket.socketpair(socket.AF_UNIX, socket.SOCK_STREAM)
 
-    child_pid = os.fork()
-    if child_pid: # parent process = client
+    def serve():
+        c.close()
+        server(s, *args, **kws)
+        assert False, "Server returned!"
+
+    with child_process(serve):
        s.close()
-       try:
-           yield c
-       finally:
-           #print("Client done.")
-           os.kill(child_pid, signal.SIGTERM)
-    else: # child process = server
-       c.close()
-       server(s)
-       assert False, "Server returned!"
-
-
+       yield c
