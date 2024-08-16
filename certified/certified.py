@@ -52,25 +52,24 @@ Config = Annotated[Optional[Path], typer.Option(
 @app.command()
 def init(name: Annotated[
                     Optional[str],
-                    typer.Argument(help="Person Name (format 'given_name surname')",
-                        rich_help_panel="""If specified, at least one email must be present, and org / division cannot be present.
-Note, only given and surnames are supported, at present.
+                    typer.Argument(help="Person Name",
+                        rich_help_panel="""Note, name parsing into given and surnames
+and generations, etc. is not supported.
 
 Examples:
-    - Timothy Tester
-    - Tester, Timothy
+    - Timothy T. Tester
 """)
                 ] = None,
          org: Annotated[
                     Optional[str],
                     typer.Option(help="Organization Name",
-                        rich_help_panel="""If specified, division must also be present and name cannot be present.
+                        rich_help_panel="""If specified, unit must also be present and name cannot be present.
 Example: 'Certificate Lab, Inc.'"
 """)
                 ] = None,
-         division: Annotated[
+         unit: Annotated[
                     Optional[str],
-                    typer.Option(help="Division",
+                    typer.Option(help="Organization Unit",
                         rich_help_panel="""If specified, org must also be present and name cannot be present.
 Example: 'Computing Directorate'
 """)
@@ -87,16 +86,17 @@ Example: 'Computing Directorate'
     """
 
     # Validate arguments
-    if org or division:
-        assert division, "If org is defined, division must also be defined."
-        assert division, "If division is defined, org must also be defined."
+    if org or unit:
+        assert unit, "If org is defined, unit must also be defined."
+        assert unit, "If unit is defined, org must also be defined."
         assert name is None, "If org is defined, name must not be defined."
-        name = encode.org_name(org, division)
+        name1 = encode.org_name(org, unit, pseudonym=f"Signing Key for O={org},OU={unit}")
+        name2 = encode.org_name(org, unit)
     elif name:
         assert org is None, "If name is defined, org must not be defined."
-        assert division is None, "If name is defined, division must not be defined."
-        assert len(email) > 0, "If name is defined, at least one email must be defined."
-        name = encode.person_name(name, email[0])
+        assert unit is None, "If name is defined, unit must not be defined."
+        name1  = encode.person_name(name, pseudonym=f"Signing key for CN={name}")
+        name2 = encode.person_name(name)
     else:
         raise AssertionError("No identities provided.")
     if sum(map(len, [email, host, uri])) > 0:
@@ -104,7 +104,7 @@ Example: 'Computing Directorate'
     else:
         raise ValueError("Host, Email, or URI must also be provided.")
 
-    cert = Certified.new(name, san, config, overwrite)
+    cert = Certified.new(name1, name2, san, config, overwrite)
     print(f"Generated new config at {cert.config}.")
     return 0
 

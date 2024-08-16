@@ -28,7 +28,7 @@ from cryptography.hazmat.primitives.serialization import (
 from .blob import *
 
 __all__ = ["SAN", "name", "PrivIface", "PubIface",
-           "cert_builder_common",
+           "cert_builder_common", "get_aki",
            "CertificateIssuerPrivateKeyTypes",
            "CertificatePublicKeyTypes"
           ]
@@ -74,12 +74,25 @@ def cert_builder_common(
         public_key: CertificatePublicKeyTypes,
         not_before: Optional[datetime.datetime] = None,
         not_after: Optional[datetime.datetime] = None,
+        self_signed: bool = False,
     ) -> x509.CertificateBuilder:
+    """
+    Common part of the certificate building process.
+
+    Factored into some re-usable code that automatically
+    sets up valid date ranges and checks that your
+    name won't collide with what you're signing.
+    """
     not_before = not_before if not_before else datetime.datetime.now(datetime.timezone.utc)
     # default valid for ~1 years
     not_after = not_after if not_after else (
             not_before + datetime.timedelta(days=365)
     )
+    if self_signed:
+        assert subject == issuer, "Self-signed certificate, but subject != issuer"
+    else:
+       assert subject != issuer, "Cannot have subject == issuer for normal certificate."
+
     return (
         x509.CertificateBuilder()
             . subject_name(subject)
@@ -95,58 +108,52 @@ def cert_builder_common(
     )
 
 def person_name(
-    given : str,
-    email : str,
-    surname : Optional[str] = None,
-    title : Optional[str] = None,
-    generation : Optional[str] = None,
-    pseudonym : Optional[str] = None,
+    name : str,
+    uname : Optional[str] = None,
+    domain : List[str] = [],
+    #email : Optional[str] = None, # deprecated.
     location: Optional[Tuple[str,str,str]] = None,
+    pseudonym: Optional[str] = None,
 ) -> x509.Name:
     """ Build and return an x509.Name suitable for an individual.
     """
+    #   (NameOID.EMAIL_ADDRESS, email)
 
-    # Interpret given = "First Last"
-    # and       given = "Last, Fist" patterns.
-    if given.split() == 2 and surname is None:
-        given, surname = given.split()
-        if given[-1] == ",":
-            given, surname = surname, given[:-1]
-
-    name_pieces = [
-        x509.NameAttribute(NameOID.GIVEN_NAME, given),
-        x509.NameAttribute(NameOID.EMAIL_ADDRESS, email)
-    ]
-    if surname:
-        name_pieces.append(x509.NameAttribute(NameOID.SURNAME, surname))
-    if title:
-        name_pieces.append(x509.NameAttribute(NameOID.TITLE, title))
-    if generation:
-        name_pieces.append(x509.NameAttribute(NameOID.GENERATION_QUALIFIER, generation))
-    if pseudonym:
-        name_pieces.append(x509.NameAttribute(NameOID.PSEUDONYM, pseudonym))
     if location:
-        country, state, city
-        name_pieces.extend([
-            x509.NameAttribute(NameOID.COUNTRY_NAME, location[0]),
-            x509.NameAttribute(NameOID.STATE_OR_PROVINCE_NAME, location[1]),
-            x509.NameAttribute(NameOID.LOCALITY_NAME, location[2]),
-        ])
+        country, state, city = location
+    else:
+        country, state, city = None, None, None
+
+    name_pieces = []
+    for oid, val in [
+                (NameOID.COMMON_NAME, name),
+                (NameOID.USER_ID, uname),
+                (NameOID.PSEUDONYM, pseudonym),
+                (NameOID.COUNTRY_NAME, country),
+                (NameOID.STATE_OR_PROVINCE_NAME, state),
+                (NameOID.LOCALITY_NAME, city)
+            ] + [
+                (NameOID.DOMAIN_COMPONENT, dn) for dn in domain
+            ]:
+        if val:
+            name_pieces.append(x509.NameAttribute(oid, val))
+
     return x509.Name(name_pieces)
 
 def org_name(
     organization_name: str,
-    unit: str,
+    unit_name: str,
     common_name: Optional[str] = None,
     location: Optional[Tuple[str,str,str]] = None,
+    pseudonym: Optional[str] = None,
 ) -> x509.Name:
     """ Build and return an x509.Name suitable for an organization.
 
     Args:
-       organization_name: Sets the "Organization Name" (O) attribute on the
-           certificate.
+       organization_name: Sets the "Organization Name" (O)
+           attribute on the certificate.
 
-       unit: Sets the "Organization Unit Name" (OU)
+       unit_name: Sets the "Organization Unit Name" (OU)
            attribute on the certificate.
     
        common_name: Sets the "Common Name" of the certificate. This is a
@@ -159,21 +166,27 @@ def org_name(
        location: Optionally a tuple containing:
            (country_code, state_or_province, city_or_locality)
 
+       pseudonym: Used here to denote whether this is a signing key.
     """
 
-    name_pieces = [
-        x509.NameAttribute(NameOID.ORGANIZATION_NAME, organization_name),
-        x509.NameAttribute(NameOID.ORGANIZATIONAL_UNIT_NAME, unit),
-    ]
     if location:
-        country, state, city
-        name_pieces.extend([
-            x509.NameAttribute(NameOID.COUNTRY_NAME, location[0]),
-            x509.NameAttribute(NameOID.STATE_OR_PROVINCE_NAME, location[1]),
-            x509.NameAttribute(NameOID.LOCALITY_NAME, location[2]),
-        ])
-    if common_name is not None:
-        name_pieces.append(x509.NameAttribute(NameOID.COMMON_NAME, common_name))
+        country, state, city = location
+    else:
+        country, state, city = None, None, None
+
+    name_pieces = []
+    for oid, val in [
+                (NameOID.ORGANIZATION_NAME, organization_name),
+                (NameOID.ORGANIZATIONAL_UNIT_NAME, unit_name),
+                (NameOID.COMMON_NAME, common_name),
+                (NameOID.PSEUDONYM, pseudonym),
+                (NameOID.COUNTRY_NAME, country),
+                (NameOID.STATE_OR_PROVINCE_NAME, state),
+                (NameOID.LOCALITY_NAME, city)
+            ]:
+        if val:
+            name_pieces.append(x509.NameAttribute(oid, val))
+
     return x509.Name(name_pieces)
 
 def _host(host):
@@ -226,3 +239,21 @@ def SAN(emails=[], hosts=[], uris=[]) -> x509.SubjectAlternativeName:
               + [x509.UniformResourceIdentifier(u) for u in uris]
            )
 
+def get_aki(cert : x509.Certificate) -> x509.AuthorityKeyIdentifier:
+    """ Collect the SubjectKeyIdentifier from a certificate
+        and return it as an AuthorityKeyIdentifier.
+        The content should be the same, but they have different
+        header / wrappers.
+    """
+    try:
+        ski_ext = cert.extensions.get_extension_for_class(
+            x509.SubjectKeyIdentifier
+        )
+    except x509.ExtensionNotFound:
+        raise
+        # we want the pubkey to match, so skip this.
+        return x509.AuthorityKeyIdentifier.from_issuer_public_key(
+                cert.public_key()
+        )
+    return x509.AuthorityKeyIdentifier \
+               .from_issuer_subject_key_identifier(ski_ext.value)

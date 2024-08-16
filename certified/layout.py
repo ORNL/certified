@@ -211,14 +211,23 @@ class Certified:
 
     @classmethod
     def new(cls,
-            name : x509.Name,
+            name1 : x509.Name,
+            name2 : x509.Name,
             san : x509.SubjectAlternativeName,
             certified_config : Optional[Pstr] = None,
             overwrite : bool = False,
            ) -> "Certified":
-        # Create a new CA and identity certificate
-        ca    = CA.new(name, san)
-        ident = ca.issue_cert(name, san)
+        """ Create a new CA and identity certificate
+        
+        Args:
+          name1: the distinguished name for the signing key
+          name2: the distinguished name for the end-entity
+          san:   subject alternate name fields for both certificates
+          certified_config: base directory to output the new identity
+          overwrite: if True, any existing files will be deleted first
+        """
+        ca    = CA.new(name1, san)
+        ident = ca.issue_cert(name2, san)
 
         cfg = config(certified_config, should_exist=overwrite)
         if overwrite: # remove existing config!

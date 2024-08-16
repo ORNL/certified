@@ -66,26 +66,23 @@ class CA(FullCert):
         # Generate our key
         private_key = encode.PrivIface(key_type).generate()
 
-        issuer = name
-        sign_key = private_key
+        issuer = name           # A self-issued certificate
+        sign_key = private_key  # self-signature.
         aki: Optional[x509.AuthorityKeyIdentifier] = None
         if parent_cert is not None:
             sign_key = parent_cert._private_key
             parent_certificate = parent_cert._certificate
             issuer = parent_certificate.subject
-            ski_ext = parent_certificate.extensions.get_extension_for_class(
-                x509.SubjectKeyIdentifier
-            )
-            aki = x509.AuthorityKeyIdentifier.from_issuer_subject_key_identifier(
-                ski_ext.value
-            )
+            aki = encode.get_aki(parent_certificate)
 
         cert_builder = cert_builder_common(
-            name, issuer, private_key.public_key()
+            name, issuer, private_key.public_key(),
+            self_signed = parent_cert is None
         ).add_extension(
             x509.BasicConstraints(ca=True, path_length=path_length),
             critical=True,
         )
+
         if aki:
             cert_builder = cert_builder.add_extension(aki, critical=False)
         if san:
@@ -170,16 +167,7 @@ class CA(FullCert):
 
         key = encode.PrivIface(key_type).generate()
 
-        ski_ext = self._certificate.extensions.get_extension_for_class(
-            x509.SubjectKeyIdentifier
-        )
-        aki = x509.AuthorityKeyIdentifier.from_issuer_subject_key_identifier(
-            ski_ext.value
-        )
-        # if SKI isn't available,
-        #aki = x509.AuthorityKeyIdentifier.from_issuer_public_key(
-        #        self._certificate.public_key()
-        #)
+        aki = encode.get_aki(self._certificate)
 
         cert = (
             cert_builder_common(

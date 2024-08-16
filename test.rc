@@ -1,0 +1,34 @@
+#!/usr/bin/env rc
+# A complicated rc script to get curl's nice
+# certificate diagnostics.
+
+# see also:
+#   openssl x509 -in tmp/0.crt -verify -text -noout
+#   openssl asn1parse -in $home/srv.key
+#   openssl s_server -CAfile $cfg/CA.crt -cert tmp/CA.crt -key tmp/CA.key
+
+
+certified init --org 'Big Sky, Inc.' --unit 'Home Goods' \
+            --host 127.0.0.1 --host localhost \
+            --config tmp --overwrite
+
+cfg=brass
+certified init 'Top Brass' --email brass@top.com \
+            --config $cfg --overwrite
+
+mkdir -p tmp/known_clients
+cat $cfg/CA.crt tmp/CA.crt >tmp/known_clients/bundle.crt
+
+uvicorn --ssl-keyfile tmp/0.key --ssl-certfile tmp/0.crt \
+        --ssl-cert-reqs 2 --ssl-ca-certs $cfg/CA.crt \
+        --host 127.0.0.1 --port 5001 server:app &
+#--ssl-ca-certs tmp/known_clients/bundle.crt \
+
+sleep 1
+
+#curl --capath tmp/known_servers \
+curl --cacert tmp/CA.crt \
+     --cert $cfg/0.crt --key $cfg/0.key \
+     https://127.0.0.1:5001
+
+kill $apid
