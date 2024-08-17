@@ -16,6 +16,8 @@ import ssl
 from pathlib import Path
 from functools import cache
 from contextlib import contextmanager
+import logging
+_logger = logging.getLogger(__name__)
 
 from cryptography import x509
 
@@ -42,16 +44,27 @@ def fixed_ssl_context(
 ) -> ssl.SSLContext:
     ctx = ssl_context(is_client = False)
     #ctx.verify_mode = ssl.VerifyMode(cert_reqs) # already required by (our) default
+    _logger.info("Using Certified's custom ssl context.")
 
     if ciphers:
         ctx.set_ciphers(ciphers)
 
     ctx.load_cert_chain(certfile, keyfile, password)
     if ca_certs:
-        if not Path(ca_certs).exists():
+        ca_cert_path = Path(ca_certs)
+        if not ca_cert_path.exists():
             ctx.load_verify_locations(cadata=ca_certs)
-        elif Path(ca_certs).is_dir():
-            ctx.load_verify_locations(capath=ca_certs)
+        elif ca_cert_path.is_dir():
+            _logger.debug("reading certificates in %s to cadata since "
+                    "capath option to load_verify_locations is "
+                    "known not to work", ca_certs)
+            #ctx.load_verify_locations(capath=ca_certs)
+            data = "\n".join(f.read_text() \
+                              for f in ca_cert_path.iterdir() \
+                              if f.suffix in [".crt", ".pem"]
+                           )
+            # Use cadata instead
+            ctx.load_verify_locations(cadata=data)
         else:
             ctx.load_verify_locations(cafile=ca_certs)
     return ctx
@@ -280,14 +293,14 @@ class Certified:
             assert uvicorn is not None, "uvicorn is not available."
 
             uvicorn.run(app,
-                        host=url.hostname,
-                        port=url.port,
-                        log_level="info",
-                        ssl_cert_reqs=ssl.VerifyMode.CERT_REQUIRED,
-                        ssl_ca_certs=cfg/"known_clients",
-                        ssl_certfile=cfg/"0.crt",
-                        ssl_keyfile=cfg/"0.key",
-                        ssl_keyfile_password=get_passwd,
-                        http="h11")
+                        host = url.hostname,
+                        port = url.port,
+                        log_level = "info",
+                        ssl_cert_reqs = ssl.VerifyMode.CERT_REQUIRED,
+                        ssl_ca_certs  = cfg/"known_clients",
+                        ssl_certfile  = cfg/"0.crt",
+                        ssl_keyfile   = cfg/"0.key",
+                        ssl_keyfile_password = get_passwd,
+                        http = "h11")
         else:
             raise ValueError(f"Unsupported URL scheme: {url.scheme}")
