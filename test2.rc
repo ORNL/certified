@@ -1,0 +1,5 @@
+# Use the same id as a client and server for echo.
+
+certified serve --config my_id examples.echo:app https://127.0.0.1:8000
+CERTIFIED_CONFIG=my_id python3 examples/echo_client.py
+

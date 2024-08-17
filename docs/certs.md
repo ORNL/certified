@@ -8,7 +8,6 @@
 
 ::: certified.CA
 
-
 ## End Entity Certificate Class (LeafCert)
 
 ::: certified.LeafCert

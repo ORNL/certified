@@ -8,7 +8,7 @@ The configuration uses a $HOME/.ssh directory-style
 layout.  See details in [docs/keys](/docs/keys.md).
 """
 
-from typing import Union, Optional, Tuple, List, Any, Callable
+from typing import Union, Optional, Tuple, List, Any, Callable, Dict
 import os
 import shutil
 from urllib.parse import urlparse
@@ -32,6 +32,14 @@ from .ca import CA, LeafCert
 
 PWCallback = Callable[(), str]
 Pstr = Union[str, "os.PathLike[str]"]
+
+def configure_capath(ssl_ctx : ssl.SSLContext, capath : Path) -> None:
+    data = "\n".join(f.read_text() \
+                        for f in capath.iterdir() \
+                        if f.suffix in [".crt", ".pem"]
+                    )
+    # Use cadata instead
+    ssl_ctx.load_verify_locations(cadata=data)
 
 def fixed_ssl_context(
     certfile: str | os.PathLike[str],
@@ -59,12 +67,7 @@ def fixed_ssl_context(
                     "capath option to load_verify_locations is "
                     "known not to work", ca_certs)
             #ctx.load_verify_locations(capath=ca_certs)
-            data = "\n".join(f.read_text() \
-                              for f in ca_cert_path.iterdir() \
-                              if f.suffix in [".crt", ".pem"]
-                           )
-            # Use cadata instead
-            ctx.load_verify_locations(cadata=data)
+            configure_capath(ctx, ca_cert_path)
         else:
             ctx.load_verify_locations(cafile=ca_certs)
     return ctx
@@ -217,9 +220,9 @@ class Certified:
         ctx = ssl_context(is_client)
         self.identity().configure_cert( ctx )
         if is_client:
-            ctx.load_verify_locations(capath=self.config/"known_servers")
+            configure_capath(ctx, self.config/"known_servers")
         else:
-            ctx.load_verify_locations(capath=self.config/"known_clients")
+            configure_capath(ctx, self.config/"known_clients")
         return ctx
 
     @classmethod
@@ -267,15 +270,15 @@ class Certified:
         return cls(cfg)
 
     @contextmanager
-    def Client(self, prefix):
-        cfg = self.config
-        headers = {'user-agent': 'certified-client/0.1.0'}
-        ident = self.identity()
-
+    def Client(self, base_url, headers : Dict[str,str] = {}):
+        """ Create an httpx.Client context
+            that includes the current identity within
+            its ssl context.
+        """
         assert httpx is not None, "httpx is not available."
 
         ssl_ctx = self.ssl_context(is_client = True)
-        with httpx.Client(base_url = prefix,
+        with httpx.Client(base_url = base_url,
                           headers = headers,
                           verify = ssl_ctx) as client:
             yield client

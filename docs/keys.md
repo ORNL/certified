@@ -4,14 +4,28 @@ One of the major stumbling blocks for public key infrastructure
 (PKI) is the management of keys and certificates.
 There need to be at least 2 separate keys for each entity
 (1 for signing certificates, and 1 for authenticating
-TLS and/or encryption).  As a user, you probably want to create
+TLS and/or encryption).  As a user, you may want to create
 ephermal keys which you can revoke when you log out.
 
 Different interacting parties may have different
 trust roots.  Thus, you will probably have to
 store a chain of trust between your own
 certificates and each different trust root that you
-want a signature from.
+obtain a signature from.
+
+The `Certified` class takes a key-directory
+as its input argument.  If none is given, it
+finds a directory depending on the first of the following
+environment variables to be set:
+
+  1. `$CERTIFIED_CONFIG`
+
+  2. `$VIRTUAL_ENV/etc/certified`
+
+  3. `/etc/certified`
+
+Inside the base directory, `Certified` expects
+the following layout:
 
   - `identity` -- PEM-encoded private and public keys
     (similar to `.ssh/id_ed25519` and `id_ed25519.pub`)
@@ -33,12 +47,12 @@ want a signature from.
       - When establishing a TLS connection you usually
         want to pass `--key 0.key --crt 0/some-signer.crt`
 
-  - `trusted_servers` -- PEM-encoded trusted server certificates.
+  - `known_servers` -- PEM-encoded trusted server certificates.
 
     * these name servers you want to access
       (similar to `.ssh/known_hosts`)
 
-  - `trusted_clients` -- PEM-encoded trusted client certificates.
+  - `known_clients` -- PEM-encoded trusted client certificates.
 
     * these (and all keys signed by them) are allowed to access
       any API you start with (certified start)
@@ -97,7 +111,10 @@ non-standard TLS.
 The myproxy project has a similar x509-compatible
 public/private key setup as here.  However, myproxy does not keep
 all private keys local to the machine where they were
-generated.  Securing this requires more complexity.
-It has support for certificate signing as an alternative,
-but that support has been listed as deprecated due to
-changes in the grid infrastructure.
+generated.  This design became complex because it
+used certificates to delegate authority -- which
+was a mistake.
+Its support for certificate signing has been listed
+as deprecated.  Ultimately, its decline was caused by
+relying on certificates for authorization, when they
+should only be used for authentication.

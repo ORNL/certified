@@ -10,7 +10,7 @@ from certified import Certified, encode
 async def app(scope, receive, send):
     print(f"scope: " + str(scope))
     if scope["type"] == "lifecycle":
-        return ""
+        return
     msg = await receive()
     await send({ "type": "http.response.start",
                  "status": 200,
@@ -18,7 +18,7 @@ async def app(scope, receive, send):
         })
     await send({
             "type": "http.response.body",
-            "body": scope.raw_path,
+            "body": scope["raw_path"],
             "more_body": False,
         })
 
@@ -46,7 +46,7 @@ def test_start(tmp_path):
                     print("Get returns.")
                 returned = True
                 assert r.status_code == 200 # httpx.codes.OK
-                print(r.text())
+                assert r.text == "/test_path"
                 break
             #except httpx.RemoteProtocolError:
             #    break
