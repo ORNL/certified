@@ -206,49 +206,33 @@ def verifykey(
     print(s)
 
 @app.command()
-def run(actor : str = typer.Argument(..., help="actor's python module (specified as 'module:attr')"),
-        max_queries : Optional[int] = typer.Option(None, help="Number of queries to answer before closing (None for infinite)."),
-        v : bool = typer.Option(False, "-v", help="show info-level logs"),
-        vv : bool = typer.Option(False, "-vv", help="show debug-level logs"),
-        config : Optional[Path] = typer.Option(None, help="Config file path [default ~/.config/actors.json].")):
+def serve(app : Annotated[
+                  str,
+                  typer.Argument(help="Server's ASGI application",
+                       rich_help_panel="Example: path.to.module:attr")
+                ],
+          url : Annotated[
+                  str,
+                  typer.Argument(help="URL to serve application",
+                       rich_help_panel="Example: https://127.0.0.1:8000")
+                ] = "https://0.0.0.0:4433",
+          v : bool = typer.Option(False, "-v", help="show info-level logs"),
+          vv : bool = typer.Option(False, "-vv", help="show debug-level logs"),
+          config : Config = None):
     """
-    Run the given actor's receive/respond event loop.
-
-    That attribute should be an instance of
-    :class:`actor_api.State`.
-
-    Its configuration will set to the config provided to this program.
+    Run the web server with HTTPS certificate-based trust setup.
     """
-    # args to pass in when calling wire's creation function
-    args : List[str] = []
     if vv:
         logging.basicConfig(level=logging.DEBUG)
     elif v:
         logging.basicConfig(level=logging.INFO)
 
-    config = cfgfile(config)
-    cfg = Config.model_validate_json(open(config).read())
-
-    mod_name, state_name = actor.split(':')
-
-    sys.path.insert(0, os.getcwd())
-    mod = importlib.import_module(mod_name)
-    state = getattr(mod, state_name)
-    if not isinstance(state, Wire):
-        state = state(*args)
-    if not isinstance(state, Wire):
-        raise TypeError("Module does not define a runnable actor.")
-
-    state.config = cfg # type: ignore[attr-defined]
-    if max_queries is not None:
-        state.remaining_queries = max_queries # type: ignore[attr-defined]
-
-    _logger.info("Running %s:%s", mod_name, state_name)
-    asyncio.run( state )
-    _logger.info("Exited %s:%s", mod_name, state_name)
+    cert = Certified(config)
+    _logger.info("Running %s", app)
+    cert.serve(app, url)
+    _logger.info("Exited %s", app)
 
 # TODO: list out identities (and key types) of all known clients or servers
 # TODO: print logs of all successful and unsuccessful authentications
-
 if __name__ == "__main__":
     app()

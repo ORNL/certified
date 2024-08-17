@@ -45,7 +45,7 @@ def test_start(tmp_path):
                     r = cl.get("/test_path")
                     print("Get returns.")
                 returned = True
-                assert r.status_code == 200
+                assert r.status_code == 200 # httpx.codes.OK
                 print(r.text())
                 break
             #except httpx.RemoteProtocolError:

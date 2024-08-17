@@ -123,7 +123,7 @@ To run an API server, create an ASGI webserver application
 class (e.g. using `app = FastAPI()` inside `my_api/server.py`),
 and then start it with:
 
-    certified start my_api.server:app [additional options]
+    certified serve my_api.server:app [additional options]
 
 
 This uses uvicorn internally and is equivalent to running:
