@@ -27,7 +27,7 @@ uvicorn --ssl-keyfile tmp/0.key --ssl-certfile tmp/0.crt \
 sleep 1
 
 #curl --capath tmp/known_servers \
-curl --cacert tmp/CA.crt \
+curl --cacert tmp/0.crt \
      --cert $cfg/0.crt --key $cfg/0.key \
      https://127.0.0.1:5001
 

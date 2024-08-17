@@ -15,7 +15,7 @@ Generate a certificate for a server or microservice using,
 
     certified init --org 'My Company' --division 'My Org Unit' \
                    --host 'my-api.org' --host 'localhost' \
-                   --email name@my-api.org \
+                   --email 'name@my-api.org' \
                    --config $VIRTUAL_ENV/etc/certified
 
 Note these are stored in different places because they
@@ -44,7 +44,9 @@ In order to introduce someone else to your server, you
 can sign their identity card,
 
     certified introduce /home/other_user/etc/certified/0.crt \
-              --scope user >/home/other_user/etc/certified/0/$USER.crt
+              --scope user \
+              --config $HOME/etc/certified \
+              >/home/other_user/etc/certified/0/$USER.crt 
 
 
 Of course, UNIX permissions don't allow doing this directly,

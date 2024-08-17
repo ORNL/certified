@@ -229,9 +229,12 @@ class Certified:
         ca    = CA.new(name1, san)
         ident = ca.issue_cert(name2, san)
 
-        cfg = config(certified_config, should_exist=overwrite)
+        cfg = config(certified_config, False)
         if overwrite: # remove existing config!
-            shutil.rmtree(cfg)
+            try:
+                shutil.rmtree(cfg)
+            except FileNotFoundError:
+                pass
         else:
             try:
                 cfg.rmdir() # only succeeds if dir. is empty
