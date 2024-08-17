@@ -1,3 +1,5 @@
+import pytest
+
 from certified import CA, LeafCert, encode, verify
 from certified.test import child_server
 from certified.wrappers import ssl_ify
@@ -22,13 +24,16 @@ def test_new_ca():
     CA.new(name)
 
 def test_cxn():
-    name = encode.org_name("Test Org.", "Testing Unit")
+    name  = encode.org_name("Test Org.", "Testing Unit")
+    name2 = encode.org_name("Test Org.", "Testing Unit", pseudonym="Signing key for test org.")
     ca = CA.new(name)
     trust_root = ca.cert_pem.bytes().decode("ascii")
     cli_cert  = ca.issue_cert( encode.person_name("Tim Tester",
                                                   "tim@test.org"),
                                encode.SAN(emails=["tim@test.org"]) )
-    srv_cert  = ca.issue_cert(name, encode.SAN(hosts=["localhost"]))
+    with pytest.raises(AssertionError):
+        srv_cert  = ca.issue_cert(name, encode.SAN(hosts=["localhost"]))
+    srv_cert  = ca.issue_cert(name2, encode.SAN(hosts=["localhost"]))
 
     """ # to manually debug by calling openssl s_server
     import subprocess
@@ -59,9 +64,10 @@ def test_cxn():
 
 def test_ca():
     name = encode.org_name("My Company", "My Division")
+    name2 = encode.org_name("My Company", "Other Division")
     san = encode.SAN(hosts=["example.com"])
     crt = CA.new(name, san, key_type="secp256r1")
-    ee = crt.issue_cert(name, san, key_type="secp256r1")
+    ee = crt.issue_cert(name2, san, key_type="secp256r1")
 
     n = verify.by_chain("example.com", ee.certificate, crt.certificate)
     assert n == 2

@@ -23,16 +23,25 @@ def test_init(tmp_path):
     assert "No identities" in str(result.exception)
 
     result = runner.invoke(app, ["init", "--config", str(tmp_path),
-                                 "Takada, Osamu",
+                                 "Osamu Takada"])
+    assert result.exit_code == 1
+
+    result = runner.invoke(app, ["init", "--config", str(tmp_path),
+                                 "Osamu Takada"])
+    assert result.exit_code == 1
+    assert isinstance(result.exception, ValueError)
+    assert "provided" in str(result.exception)
+
+    result = runner.invoke(app, ["init", "--config", str(tmp_path),
+                                 "Osamu Takeda",
                                  "--email", "me@home.org"])
     assert result.exit_code == 0
-
     warn, err = check_config(tmp_path)
     assert len(warn) == 0
     assert len(err) == 0
 
     result = runner.invoke(app, ["init", "--config", str(tmp_path),
-                                 "Takeda, Osamu",
+                                 "Osamu Takeda",
                                  "--email", "me@home.org"])
     assert result.exit_code == 1
     assert isinstance(result.exception, FileExistsError)
@@ -42,11 +51,19 @@ def test_init(tmp_path):
                                  "--division", "Fraud Detection",
                                  "--host", "localhost",
                                  "--overwrite"])
+    assert result.exit_code == 2
+    assert isinstance(result.exception, SystemExit)
+
+    result = runner.invoke(app, ["init", "--config", str(tmp_path),
+                                 "--org", "Fictitious Organization",
+                                 "--unit", "Fraud Detection",
+                                 "--host", "localhost",
+                                 "--overwrite"])
     assert result.exit_code == 0
 
     result = runner.invoke(app, ["init", "--config", str(tmp_path),
                                  "--org", "Fictitious Organization",
-                                 "--division", "Fraud Detection",
+                                 "--unit", "Fraud Detection",
                                  "--overwrite"])
     assert result.exit_code == 1
     assert isinstance(result.exception, ValueError)
