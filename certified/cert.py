@@ -48,9 +48,17 @@ def fixed_ssl_context(
             ctx.load_verify_locations(cafile=ca_certs)
     return ctx
 
+
 try:
     import uvicorn
     uvicorn.config.create_ssl_context = fixed_ssl_context
+    # https://github.com/encode/uvicorn/discussions/2307
+    from uvicorn.protocols.http.h11_impl import RequestResponseCycle
+    responseCycleInit = RequestResponseCycle.__init__
+    def monkey_patch_response_cycle(self,*k,**kw):
+        responseCycleInit(self,*k,**kw)
+        self.scope['transport'] = self.transport
+    RequestResponseCycle.__init__ = monkey_patch_response_cycle
 except ImportError:
     uvicorn = None
 
