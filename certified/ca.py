@@ -11,7 +11,7 @@ from cryptography.x509.oid import ExtendedKeyUsageOID
 
 from .cert_base import FullCert
 
-from .blob import PublicBlob, PrivateBlob, Blob
+from .blob import PublicBlob, PrivateBlob, Blob, PWCallback
 import certified.encode as encode
 from .encode import cert_builder_common
 
@@ -27,7 +27,7 @@ class CA(FullCert):
     """
 
     def __init__(self, cert_bytes: bytes, private_key_bytes: bytes,
-                 get_pw: Optional[Callable[(), str]] = None) -> None:
+                 get_pw: PWCallback = None) -> None:
         """Load a CA from an existing cert and private key.
 
         Args:
@@ -64,7 +64,7 @@ class CA(FullCert):
           parent_cert: parent who will sign this CA (None = self-sign)
         """
         # Generate our key
-        private_key = encode.PrivIface(key_type).generate()
+        private_key = encode.PrivIface(key_type).generate() # type: ignore[union-attr]
 
         issuer = name           # A self-issued certificate
         sign_key = private_key  # self-signature.
@@ -110,11 +110,13 @@ class CA(FullCert):
                    PrivateBlob(private_key).bytes())
 
     def create_child_ca(self, name : x509.Name,
+                              san : x509.SubjectAlternativeName,
                               key_type: str = "ed25519") -> "CA":
         """Creates a child certificate authority
 
         Args:
-          name: the x509 organization named by the certificate
+          name: The x509 subject organization named by the certificate.
+          san: Alternative names for the organization named by the certificate.
           key_type: type of key to generate
 
         Returns:
@@ -123,11 +125,15 @@ class CA(FullCert):
         Raises:
           ValueError: if the CA path length is 0
         """
+        assert self._path_length is not None # although was validated before...
         if self._path_length == 0:
             raise ValueError("Can't create child CA: path length is 0")
 
         path_length = self._path_length - 1
-        return CA.new(parent_cert=self, path_length=path_length, key_type=key_type)
+        return CA.new(name, san,
+                      path_length = path_length,
+                      key_type = key_type,
+                      parent_cert = self)
 
     def issue_cert(
         self,
@@ -165,7 +171,7 @@ class CA(FullCert):
 
         """
 
-        key = encode.PrivIface(key_type).generate()
+        key = encode.PrivIface(key_type).generate() # type: ignore[union-attr]
 
         aki = encode.get_aki(self._certificate)
 
@@ -254,7 +260,7 @@ class LeafCert(FullCert):
     def __init__(self,
             cert_bytes: bytes,
             private_key_bytes: bytes,
-            get_pw: Optional[Callable[(), str]] = None,
+            get_pw: PWCallback = None,
             chain_to_ca: List[bytes] = []
     ) -> None:
         super().__init__(cert_bytes, private_key_bytes, get_pw)

@@ -11,11 +11,9 @@ layout.  See details in [docs/keys](/docs/keys.md).
 from typing import Union, Optional, Tuple, List, Any, Callable, Dict
 import os
 from pathlib import Path
-from functools import cache
 
 from .blob import Blob, is_user_only, Pstr
 
-@cache
 def config(certified_config : Optional[Pstr] = None,
            should_exist=True) -> Path:
     """Lookup and return the location of the certified-apis
@@ -82,7 +80,7 @@ class Identity(CRTDir):
         super().__init__(base)
 
     def key(self, name : Pstr) -> Blob:
-        return Blob.read(name + ".key")
+        return Blob.read( str(name) + ".key")
 
 def check_config(base : Path) -> Tuple[List[str], List[str]]:
     """ Scans the base configuration directory and

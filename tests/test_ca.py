@@ -69,5 +69,5 @@ def test_ca():
     crt = CA.new(name, san, key_type="secp256r1")
     ee = crt.issue_cert(name2, san, key_type="secp256r1")
 
-    n = verify.by_chain("example.com", ee.certificate, crt.certificate)
+    n = verify.by_chain("example.com", [ee.certificate, crt.certificate])
     assert n == 2

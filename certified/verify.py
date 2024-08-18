@@ -4,7 +4,7 @@ from cryptography import x509
 from cryptography.x509 import DNSName
 from cryptography.x509.verification import PolicyBuilder, Store
 
-def by_chain(host : str, *chain : x509) -> int:
+def by_chain(host : str, chain : List[x509.Certificate]) -> int:
     """ Verifies a chain of certificates,
         with the end-entity (with DNSName "host") at chain[0]
         and the root at chain[-1]

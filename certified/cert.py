@@ -1,5 +1,5 @@
 import os
-from typing import Union, Optional, Tuple, List, Any, Callable, Dict
+from typing import Union, Optional, Tuple, List, Any, Dict
 from urllib.parse import urlparse
 from contextlib import contextmanager
 from pathlib import Path
@@ -13,9 +13,7 @@ from cryptography import x509
 import certified.layout as layout
 from .ca import CA, LeafCert
 from .wrappers import ssl_context, configure_capath
-from .blob import Pstr
-
-PWCallback = Callable[(), str]
+from .blob import Pstr, PWCallback
 
 def fixed_ssl_context(
     certfile: str | os.PathLike[str],
@@ -37,7 +35,7 @@ def fixed_ssl_context(
     if ca_certs:
         ca_cert_path = Path(ca_certs)
         if not ca_cert_path.exists():
-            ctx.load_verify_locations(cadata=ca_certs)
+            ctx.load_verify_locations(cadata=str(ca_certs))
         elif ca_cert_path.is_dir():
             _logger.debug("reading certificates in %s to cadata since "
                     "capath option to load_verify_locations is "
@@ -58,14 +56,14 @@ try:
     def monkey_patch_response_cycle(self,*k,**kw):
         responseCycleInit(self,*k,**kw)
         self.scope['transport'] = self.transport
-    RequestResponseCycle.__init__ = monkey_patch_response_cycle
+    RequestResponseCycle.__init__ = monkey_patch_response_cycle # type: ignore[method-assign]
 except ImportError:
-    uvicorn = None
+    uvicorn = None # type: ignore[assignment]
 
 try:
     import httpx
 except ImportError:
-    httpx = None
+    httpx = None # type: ignore[assignment]
 
 class Certified:
     def __init__(self, certified_config : Optional[Pstr] = None):
@@ -131,7 +129,7 @@ class Certified:
         return cls(cfg)
 
     @contextmanager
-    def Client(self, base_url, headers : Dict[str,str] = {}):
+    def Client(self, base_url : str = "", headers : Dict[str,str] = {}):
         """ Create an httpx.Client context
             that includes the current identity within
             its ssl context.
@@ -161,10 +159,10 @@ class Certified:
                         port = url.port,
                         log_level = "info",
                         ssl_cert_reqs = ssl.VerifyMode.CERT_REQUIRED,
-                        ssl_ca_certs  = cfg/"known_clients",
+                        ssl_ca_certs  = cfg/"known_clients", # type: ignore[arg-type]
                         ssl_certfile  = cfg/"0.crt",
-                        ssl_keyfile   = cfg/"0.key",
-                        ssl_keyfile_password = get_passwd,
+                        ssl_keyfile   = cfg/"0.key", # type: ignore[arg-type]
+                        ssl_keyfile_password = get_passwd, # type: ignore[arg-type]
                         http = "h11")
         else:
             raise ValueError(f"Unsupported URL scheme: {url.scheme}")

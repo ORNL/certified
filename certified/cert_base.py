@@ -2,7 +2,7 @@
     a private key.
 """
 
-from typing import Optional, List, Callable
+from typing import Optional, List
 
 from cryptography import x509
 #from cryptography.hazmat.primitives import hashes
@@ -10,8 +10,15 @@ from cryptography import x509
 from cryptography.hazmat.primitives.serialization import (
     load_pem_private_key,
 )
+# used only to name types below
+from cryptography.hazmat.primitives.asymmetric import (
+    ed448,
+    ed25519,
+    ec,
+    rsa
+)
 
-from .blob import PublicBlob, PrivateBlob, Blob, Pstr
+from .blob import PublicBlob, PrivateBlob, Blob, Pstr, PWCallback
 import certified.encode as encode
 from .encode import CertificateIssuerPrivateKeyTypes
 
@@ -20,9 +27,10 @@ class FullCert:
     """
     _certificate: x509.Certificate
     _private_key: CertificateIssuerPrivateKeyTypes
+    _path_length: Optional[int]
 
     def __init__(self, cert_bytes: bytes, private_key_bytes: bytes,
-                 get_pw: Optional[Callable[(), str]] = None) -> None:
+                 get_pw: PWCallback = None) -> None:
         """Create from an existing cert and private key.
 
         Args:
@@ -32,18 +40,21 @@ class FullCert:
         """
         #self.parent_cert = None
         self._certificate = x509.load_pem_x509_certificate(cert_bytes)
-        password : Optional[str] = None
+        password : Optional[bytes] = None
         if get_pw:
             password = get_pw()
-        self._private_key = load_pem_private_key(
+        pkey = load_pem_private_key(
                     private_key_bytes, password=password
         )
+        assert isinstance(pkey, (ed25519.Ed25519PrivateKey, ed448.Ed448PrivateKey, rsa.RSAPrivateKey, ec.EllipticCurvePrivateKey)), f"Unusable key type: {type(pkey)}"
+        self._private_key = pkey
+        self._path_length = None
 
     @classmethod
     def load(cls, base : Pstr, get_pw = None):
         cert = Blob.read(str(base) + ".crt")
         key  = Blob.read(str(base) + ".key")
-        assert key.is_secret, f"{base+'.key'} has compromised file permissions."
+        assert key.is_secret, f"{str(base)+'.key'} has compromised file permissions."
         return cls(cert.bytes(), key.bytes(), get_pw)
     
     def save(self, base : Pstr, overwrite = False):
@@ -79,17 +90,17 @@ class FullCert:
         #    sign_key = parent_cert._private_key
         #    parent_certificate = parent_cert._certificate
         #    issuer = parent_certificate.subject
-        SAN = self._certificate.extensions.get_extension_for_class(
-                SubjectAlternativeName
+        san = self._certificate.extensions.get_extension_for_class(
+                x509.SubjectAlternativeName
         )
         # TODO: read key type and call hash_for_key
 
         csr = x509.CertificateSigningRequestBuilder().subject_name(
             self._certificate.subject
         ).add_extension(
-            SAN.value,
-            critical=SAN.critical,
-        ).sign(self._private_key) #, hashes.SHA256())
+            san.value,
+            critical=san.critical,
+        ).sign(self._private_key, None) #, hashes.SHA256())
         return PublicBlob(csr)
 
     def revoke(self) -> None:

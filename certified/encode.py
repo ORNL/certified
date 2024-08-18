@@ -39,7 +39,7 @@ class GenericEC:
     def generate(self):
         return ec.generate_private_key(self.instance)
 
-def PrivIface(keytype) -> CertificateIssuerPrivateKeyTypes:
+def PrivIface(keytype) -> GenericEC | type[CertificateIssuerPrivateKeyTypes]:
     if keytype == "ed25519":
         return ed25519.Ed25519PrivateKey
     elif keytype == "ed448":
@@ -55,13 +55,13 @@ def PrivIface(keytype) -> CertificateIssuerPrivateKeyTypes:
         return GenericEC(ec.SECP256K1())
     raise KeyError(keytype)
 
-def hash_for_key(keytype):
+def hash_for_key(keytype) -> Optional[hashes.SHA256]:
     if keytype == "ed25519" or keytype == "ed448":
         return None
     #return hashes.BLAKE2b(64) # cryptography.exceptions.UnsupportedAlgorithm: Hash algorithm "blake2b" not supported for signatures
     return hashes.SHA256()
 
-def PubIface(keytype) -> CertificatePublicKeyTypes:
+def PubIface(keytype) -> type[CertificatePublicKeyTypes]:
     if keytype == "ed25519":
         return ed25519.Ed25519PublicKey
     elif keytype == "ed448":

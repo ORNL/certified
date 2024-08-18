@@ -1,8 +1,8 @@
 import os
-from typing import Literal, Union, Optional, Generator
+from typing import Literal, Union, Optional, Iterator, IO, Any, Callable
 from tempfile import NamedTemporaryFile
 from pathlib import Path
-from contextlib import contextmanager
+from contextlib import contextmanager, AbstractContextManager
 
 from cryptography import x509
 from cryptography.hazmat.primitives.asymmetric.types import (
@@ -15,9 +15,10 @@ from cryptography.hazmat.primitives.serialization import (
     load_pem_private_key,
 )
 
-__all__ = ["Blob", "PublicBlob", "PrivateBlob"]
+__all__ = ["Blob", "PublicBlob", "PrivateBlob", "Pstr", "PWCallback"]
 
 Pstr = Union[str, "os.PathLike[str]"]
+PWCallback = Optional[Callable[[], bytes]]
 
 @contextmanager
 def set_umask(umask):
@@ -28,7 +29,8 @@ def set_umask(umask):
         os.umask(prev_umask)
 
 @contextmanager
-def new_file(fname : Pstr, mode : int, perm : int, remove=False):
+def new_file(fname : Pstr, mode : str, perm : int,
+             remove=False) -> Iterator[IO[Any]]:
     """ Fix the file open() API to create
         new files securely.
     """
@@ -70,7 +72,7 @@ class Blob:
         is_secret = is_user_only(fname)
         with open(fname, "rb") as f:
             data = f.read()
-        return cls(data, "secret" if is_secret else "public")
+        return cls(data, is_secret)
 
     def bytes(self) -> bytes:
         """Returns the data as a `bytes` object."""
@@ -92,22 +94,23 @@ class Blob:
                with the given name. If True, append to any existing file.
         """
         p = Path(path)
+        ctxt : AbstractContextManager[IO[Any]]
         if append:
             if self.is_secret:
                 assert is_user_only(p)
-            ctxt = lambda: p.open("ab")
+            ctxt = p.open("ab")
         else:
             if self.is_secret:
-                ctxt = lambda: new_file(p, "wb", 0o600)
+                ctxt = new_file(p, "wb", 0o600)
             else:
-                ctxt = lambda: new_file(p, "wb", 0o644)
-                #ctxt = lambda: p.open("wb")
+                ctxt = new_file(p, "wb", 0o644)
+                #ctxt = p.open("wb")
 
-        with ctxt() as f:
+        with ctxt as f:
             f.write(self._data)
 
     @contextmanager
-    def tempfile(self, dir: Optional[str] = None) -> Generator[str, None, None]:
+    def tempfile(self, dir: Optional[str] = None) -> Iterator[str]:
         """Context manager for writing data to a temporary file.
 
         The file is created when you enter the context manager, and
@@ -144,7 +147,8 @@ class Blob:
                 os.unlink(f.name)
 
 class PublicBlob(Blob):
-    def __init__(self, cert : x509) -> None:
+    def __init__(self, cert : x509.Certificate
+                            | x509.CertificateSigningRequest) -> None:
         super().__init__(cert.public_bytes(Encoding.PEM), False)
 
 class PrivateBlob(Blob):

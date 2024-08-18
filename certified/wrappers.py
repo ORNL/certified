@@ -31,9 +31,9 @@ def ssl_ify(client_or_server : str):
     def close(fn):
         @wraps(fn)
         def wrap(sock, *args,
-                 cert: LeafCert  = None,
-                 trust_root: str = "",
-                 remote_name: Optional[str]=None):
+                 cert: LeafCert,
+                 trust_root: str,
+                 remote_name: Optional[str] = None):
             # trust_root should be the ascii-decoded
             # contents of the trust root's PEM-format
             # certificate.

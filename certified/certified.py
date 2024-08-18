@@ -88,7 +88,7 @@ Example: 'Computing Directorate'
     # Validate arguments
     if org or unit:
         assert unit, "If org is defined, unit must also be defined."
-        assert unit, "If unit is defined, org must also be defined."
+        assert org, "If unit is defined, org must also be defined."
         assert name is None, "If org is defined, name must not be defined."
         name1 = encode.org_name(org, unit, pseudonym=f"Signing Key for O={org},OU={unit}")
         name2 = encode.org_name(org, unit)
@@ -108,50 +108,75 @@ Example: 'Computing Directorate'
     print(f"Generated new config at {cert.config}.")
     return 0
 
+def str_to_set(s):
+    return set(s.split())
+
 @app.command()
-def new(host : Hostname = [],
-        url : str = typer.Argument(..., help="Server's listening URL."),
-        my_scopes : str = typer.Argument("", help="Whitespace-separated list of scopes that the creator will be configured with by default."),
-        config : Optional[Path] = typer.Option(None, help="Config file path [default ~/.config/actors.json].")):
+def introduce(crt : Annotated[
+                        Path,
+                        typer.Argument(help="Subject's certificate.")
+                    ],
+              my_scopes : Annotated[
+                        str,
+                        typer.Argument(help="Whitespace-separated list of scopes you trust the subject for.")
+                    ] = "",
+              add_client : Annotated[
+                        bool,
+                        typer.Argument(help="Add the subject directly to known_clients.")
+                    ] = False,
+              add_server : Annotated[
+                        bool,
+                        typer.Argument(help="Add the subject directly to known_servers.")
+                    ] = False,
+              config : Config = None):
     """
-    Create a new identity and add it as a trusted server:
+    Write an introduction for the subject named by the
+    certificate above.  Do not use this function unless
+    you have checked both of the following:
 
-      - it will appear in {config}/known_servers
-      - your `CA.crt` will appear in {server}/known_clients/origin.crt
-      - your listed scopes will appear next to that file as `origin.scope`
+    1. The certificate is actually held by the subject and
+       not someone else pretending to be the subject.
+
+    2. The subject will maintain the secrecy of their
+       private key, and not copy it anywhere.
+
+    If either of those are false, your introductions are no
+    longer trustworthy, and you'll need to create a new
+    identity!
+
+
+    To use this introduction, the subject will need to place
+    your response in their config. as "0/<your name>.crt".
+
+    If --add-client is specified, also adds this certificate
+    to your list of known clients.  The subject will not
+    need to present your signature back to you for this to work.
+
+    If --add-server is specified, also adds this certificate
+    to your list of known servers.  The subject will not
+    need to present your signature back to you for this to work.
     """
 
+    cert = Certified(config)
     scopes = str_to_set(my_scopes)
 
-    config = cfgfile(config)
-    cfg = Config.model_validate_json(open(config).read())
+    # TODO: the signing part...
+    print(cert)
 
-    app = Config( name = name
-                , privkey = gen_key()
-                , listen = url
-                )
-    # add cfg as a client of app (2-sided add)
-    cli_srv(cfg, app, scopes)
+    # TODO: implement add_client and add_server
+    if add_client:
+        raise NotImplementedError()
+    if add_server:
+        raise NotImplementedError()
 
-    # print the new app's config to stdout
-    write_config(None, app)
-
-    # save the user's modified config.
-    write_config(config, cfg)
-
-def introduce():
-    # TODO
-    pass
-
+"""
 @app.command()
 def grant(entity : str = typer.Argument(..., help="Grantee's name."),
           pubkey : str = typer.Argument(..., help="Grantee's pubkey to sign"),
           scopes : str = typer.Argument("", help="Whitespace-separated list of scopes to grant."),
           hours  : float = typer.Option(10.0, help="Hours until expiration."),
           config : Optional[Path] = typer.Option(None, help="Config file path [default ~/.config/actors.json].")):
-    """
-    Sign a token and print it to stdout.
-    """
+    # Sign a biscuit and print it to stdout.
     config = cfgfile(config)
     cfg = Config.model_validate_json(open(config).read())
     #print(f"Granting actor {entity} pubkey {pubkey} and {scopes}")
@@ -169,41 +194,7 @@ def grant(entity : str = typer.Argument(..., help="Grantee's name."),
     sgrant = signGrant(grant, cfg.privkey)
     s = json.dumps({"grants": {cfg.name: to_jsonable_python(sgrant)}}, indent=4)
     print(s)
-
-@app.command()
-def pubkey(
-          config : Optional[Path] = typer.Option(None, help="Config file path [default ~/.config/actors.json].")):
-    """
-    Print out the public key that corresponds to this config.
-    """
-    config = cfgfile(config)
-    cfg = Config.model_validate_json(open(config).read())
-    svc = KnownService(
-            url = cfg.listen or '',
-            pubkey = get_pubkey(cfg.privkey),
-            auths = set(cfg.validators.keys()),
-            )
-    s = json.dumps({"services": {cfg.name: to_jsonable_python(svc)}}, indent=4)
-    print(s)
-
-@app.command()
-def verifykey(
-          config : Optional[Path] = typer.Option(None, help="Config file path [default ~/.config/actors.json].")):
-    """
-    Print out the validation key that corresponds to signatures
-    generated from this config.
-
-    The result is suitable to add to a "Config.validators" dict.
-    """
-    config = cfgfile(config)
-    cfg = Config.model_validate_json(open(config).read())
-    svc = KnownService(
-            url = cfg.listen or '',
-            pubkey = get_verifykey(cfg.privkey),
-            auths = set(cfg.validators.keys()),
-            )
-    s = json.dumps({"validators": {cfg.name: to_jsonable_python(svc)}}, indent=4)
-    print(s)
+"""
 
 @app.command()
 def serve(app : Annotated[
