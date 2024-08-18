@@ -1,9 +1,11 @@
 [tool.poetry]
 name = "certified"
-version = "0.1.0"
-description = "The missing certificate infrastructure for HTTPS-REST APIs."
-authors = ["David M. Rogers <predictivestatmech@gmail.com>"]
-license = "MIT"
+version = "0.5.0"
+description = "The missing certificate infrastructure for web APIs."
+authors = [
+            "David M. Rogers <predictivestatmech@gmail.com>",
+]
+license = "BSD-3-Clause"
 readme = "README.md"
 
 [tool.poetry.scripts]
