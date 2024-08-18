@@ -15,7 +15,6 @@ We make the following design choices:
 * tokens/cookies - we rely on the [datalog model of biscuits](https://doc.biscuitsec.org/reference/datalog)
   to exchange cookies that carry authorization proofs.
   Tokens, not certificates are used to delegate authorization.
-  This makes use of [scitokens](https://scitokens.org/).
 
 * symmetry - symmetric ideas are used for setting up
   mutual identity verification (authentication) between
@@ -44,7 +43,7 @@ with?
 The certified package has you covered.
 
 
-See [documentation][docs] for explanations and howto-s.
+See [documentation](docs) for explanations and howto-s.
 
 # Installation
 
@@ -75,35 +74,46 @@ Preview the documentation with:
 
 # Docs
 
-Documentation was built using [this guide](https://realpython.com/python-project-documentation-with-mkdocs/) -- which comes highly recommended:
+Documentation was built using [this guide](https://realpython.com/python-project-documentation-with-mkdocs/) -- which comes highly recommended.
 
 # References
 
-[x509]: https://cryptography.io/en/latest/x509/tutorial/#creating-a-certificate-signing-request-csr "Python x509 Cryptography HOWTO"
-[openssl]: https://x509errors.org/guides/openssl "OpenSSL: TLS Guide" -- building a custom validator in C
 [mtls]: https://www.golinuxcloud.com/mutual-tls-authentication-mtls/ "Mutual TLS"
+
+[x509]: https://cryptography.io/en/latest/x509/tutorial/#creating-a-certificate-signing-request-csr "Python x509 Cryptography HOWTO"
+
+[openssl]: https://x509errors.org/guides/openssl "OpenSSL: TLS Guide" -- building a custom validator in C
+
 [exts]: https://www.golinuxcloud.com/add-x509-extensions-to-certificate-openssl/ "Adding Extensions to x509"
+
 [globus]: https://globus.stanford.edu/security.html
 
 ## Use of TLS/certs in services
 
 [uvicorn]: https://github.com/encode/uvicorn/discussions/2307
+
 [rucio transfers]: https://rucio.cern.ch/documentation/operator/transfers/transfers-overview/
+
 [fts3 logging setup (enables TLS)]: https://fts3-docs.web.cern.ch/fts3-docs/docs/install/messaging.html
 
 [fts3 tls]: https://fts3-docs.web.cern.ch/fts3-docs/docs/developers/tls_shenanigans.html
 
 ## more on custom attributes using openssl command
 
-https://stackoverflow.com/questions/36007663/how-to-add-custom-field-to-certificate-using-openssl
-https://stackoverflow.com/questions/17089889/openssl-x509v3-extended-key-usage -- config. file attributes
-https://superuser.com/questions/947061/openssl-unable-to-find-distinguished-name-in-config/1118045 -- use a complete config
+- https://stackoverflow.com/questions/36007663/how-to-add-custom-field-to-certificate-using-openssl
+
+- https://stackoverflow.com/questions/17089889/openssl-x509v3-extended-key-usage -- config. file attributes
+
+- https://superuser.com/questions/947061/openssl-unable-to-find-distinguished-name-in-config/1118045 -- use a complete config
 
 ## More on JWT/cookies/macaroons/biscuits
+
+[scitokens]: https://scitokens.org/
 
 [scitokens proposal]: https://scitokens.org/scitokens-proposal-public.pdf
 
 [scitokens presentation]: https://scitokens.org/presentations/SciTokens-GDB-Oct-2017.pdf
+o
 
 [Indigo IAM JWT profiles]: https://indigo-iam.github.io/v/v1.9.0/docs/reference/configuration/jwt-profiles/
 
