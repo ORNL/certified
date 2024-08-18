@@ -90,13 +90,11 @@ Example: 'Computing Directorate'
         assert unit, "If org is defined, unit must also be defined."
         assert org, "If unit is defined, org must also be defined."
         assert name is None, "If org is defined, name must not be defined."
-        name1 = encode.org_name(org, unit, pseudonym=f"Signing Key for O={org},OU={unit}")
-        name2 = encode.org_name(org, unit)
+        xname = encode.org_name(org, unit)
     elif name:
         assert org is None, "If name is defined, org must not be defined."
         assert unit is None, "If name is defined, unit must not be defined."
-        name1  = encode.person_name(name, pseudonym=f"Signing key for CN={name}")
-        name2 = encode.person_name(name)
+        xname = encode.person_name(name)
     else:
         raise AssertionError("No identities provided.")
     if sum(map(len, [email, host, uri])) > 0:
@@ -104,8 +102,8 @@ Example: 'Computing Directorate'
     else:
         raise ValueError("Host, Email, or URI must also be provided.")
 
-    cert = Certified.new(name1, name2, san, config, overwrite)
-    print(f"Generated new config at {cert.config}.")
+    cert = Certified.new(xname, san, config, overwrite)
+    print(f"Generated new config for {xname.rfc4514_string()} at {cert.config}.")
     return 0
 
 def str_to_set(s):
@@ -146,7 +144,8 @@ def introduce(crt : Annotated[
 
 
     To use this introduction, the subject will need to place
-    your response in their config. as "0/<your name>.crt".
+    your response in their config. as "id/<your_name>.crt"
+    or "CA/<your_name>.crt".
 
     If --add-client is specified, also adds this certificate
     to your list of known clients.  The subject will not

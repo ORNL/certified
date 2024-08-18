@@ -30,7 +30,8 @@ from .blob import *
 __all__ = ["SAN", "name", "PrivIface", "PubIface",
            "cert_builder_common", "get_aki",
            "CertificateIssuerPrivateKeyTypes",
-           "CertificatePublicKeyTypes"
+           "CertificatePublicKeyTypes",
+           "append_pseudonym"
           ]
 
 class GenericEC:
@@ -188,6 +189,22 @@ def org_name(
             name_pieces.append(x509.NameAttribute(oid, val))
 
     return x509.Name(name_pieces)
+
+def append_pseudonym(name : x509.Name, ps : str) -> x509.Name:
+    """
+    Append a NameOID.PSEUDONYM field to the name
+    with the given value.
+
+    Used by certified to create a unique name for the
+    signing certificate by appending ps = "Signing Certificate"
+
+    Args:
+      name: the base name
+      ps: appended pseudonym
+    """
+    parts = [n for n in name]
+    parts.append( x509.NameAttribute(NameOID.PSEUDONYM, ps) )
+    return x509.Name(parts)
 
 def _host(host):
     # Have to try ip_address first, because ip_network("127.0.0.1") is

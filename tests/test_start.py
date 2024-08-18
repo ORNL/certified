@@ -24,10 +24,9 @@ async def app(scope, receive, send):
 
 def test_start(tmp_path):
     name = encode.org_name("My Company", "My Division")
-    name2 = encode.org_name("My Company", "My Division", "mycompany.com")
     san  = encode.SAN(hosts=["localhost", "127.0.0.1"])
 
-    cert = Certified.new(name, name2, san, tmp_path)
+    cert = Certified.new(name, san, tmp_path)
     with pytest.raises(ValueError):
         cert.serve(app, "127.0.0.1:5001")
     with pytest.raises(ValueError):

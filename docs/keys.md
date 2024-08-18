@@ -27,30 +27,39 @@ environment variables to be set:
 Inside the base directory, `Certified` expects
 the following layout:
 
-  - `identity` -- PEM-encoded private and public keys
+  - main directory: PEM-encoded private and public keys
     (similar to `.ssh/id_ed25519` and `id_ed25519.pub`)
 
     * CA.key, CA.crt -- private and public signing keys
 
-    * 0.key, 0.crt   -- end-entity identification key for
-                        establishing TLS connections and encryption
+    * id.key, id.crt   -- end-entity identification key for
+                          establishing TLS connections and encryption
 
     * Since each certificate can be signed by others,
       one subdirectory (named after each certificate)
       holds signatures for that key from other authorities.
 
-      e.g. `CA/signer[A,B,...].crt` and `0/signer[A,B,...].crt`
+      e.g. `CA/signer[A,B,...].crt` and `id/signer[A,B,...].crt`
 
       - multiple public keys within this directory refer to the
         same identity, but are named after the CA that signed them.
 
-      - When establishing a TLS connection you usually
-        want to pass `--key 0.key --crt 0/some-signer.crt`
+      - When establishing a TLS connection to a server that
+        trusts `some_signer`, you should use
+        `--key id.key --crt id/some_signer.crt`
+        `Certified.Client` and the `message` utility
+        do this automatically.
 
   - `known_servers` -- PEM-encoded trusted server certificates.
 
     * these name servers you want to access
       (similar to `.ssh/known_hosts`)
+      as well as signing authorities that we trust to sign
+      server certificates for those we don't know directly
+      (similar to cacerts)
+
+    * TODO: we should add a config file to ea. specifying
+      the URL to use and the server's trusted signers.
 
   - `known_clients` -- PEM-encoded trusted client certificates.
 

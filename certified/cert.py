@@ -11,6 +11,7 @@ _logger = logging.getLogger(__name__)
 from cryptography import x509
 
 import certified.layout as layout
+from .encode import append_pseudonym
 from .ca import CA, LeafCert
 from .wrappers import ssl_context, configure_capath
 from .blob import Pstr, PWCallback
@@ -73,7 +74,7 @@ class Certified:
         return CA.load(self.config / "CA")
 
     def identity(self):
-        return LeafCert.load(self.config / "0")
+        return LeafCert.load(self.config / "id")
 
     def ssl_context(self, is_client : bool) -> ssl.SSLContext:
         ctx = ssl_context(is_client)
@@ -86,8 +87,7 @@ class Certified:
 
     @classmethod
     def new(cls,
-            name1 : x509.Name,
-            name2 : x509.Name,
+            name : x509.Name,
             san : x509.SubjectAlternativeName,
             certified_config : Optional[Pstr] = None,
             overwrite : bool = False,
@@ -95,14 +95,13 @@ class Certified:
         """ Create a new CA and identity certificate
         
         Args:
-          name1: the distinguished name for the signing key
-          name2: the distinguished name for the end-entity
-          san:   subject alternate name fields for both certificates
+          name: the distinguished name for the signing key
+          san:   subject alternate name fields for the entity certificate
           certified_config: base directory to output the new identity
           overwrite: if True, any existing files will be deleted first
         """
-        ca    = CA.new(name1, san)
-        ident = ca.issue_cert(name2, san)
+        ca    = CA.new(append_pseudonym(name, "Signing Certificate"))
+        ident = ca.issue_cert(name, san)
 
         cfg = layout.config(certified_config, False)
         if overwrite: # remove existing config!
@@ -120,7 +119,7 @@ class Certified:
         cfg.mkdir(exist_ok=True, parents=True)
 
         ca.save(cfg / "CA", False)
-        ident.save(cfg / "0", False)
+        ident.save(cfg / "id", False)
 
         (cfg/"known_servers").mkdir()
         (cfg/"known_clients").mkdir()
@@ -160,8 +159,8 @@ class Certified:
                         log_level = "info",
                         ssl_cert_reqs = ssl.VerifyMode.CERT_REQUIRED,
                         ssl_ca_certs  = cfg/"known_clients", # type: ignore[arg-type]
-                        ssl_certfile  = cfg/"0.crt",
-                        ssl_keyfile   = cfg/"0.key", # type: ignore[arg-type]
+                        ssl_certfile  = cfg/"id.crt",
+                        ssl_keyfile   = cfg/"id.key", # type: ignore[arg-type]
                         ssl_keyfile_password = get_passwd, # type: ignore[arg-type]
                         http = "h11")
         else:

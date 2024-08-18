@@ -116,13 +116,15 @@ def check_config(base : Path) -> Tuple[List[str], List[str]]:
     if not base.is_dir():
         return gone(base)
 
-    key = base/"CA.key"
-    if not (key).is_file():
-        gone(key)
-    if not is_user_only(key):
-        error(f"Invalid key file permissions on {key}!")
-    if not (base/"CA.crt").is_file():
-        gone(base/"CA.crt")
+    for keyname in ["CA", "id"]:
+        key = base/f"{keyname}.key"
+        if not key.is_file():
+            gone(key)
+        if not is_user_only(key):
+            error(f"Invalid key file permissions on {key}!")
+        crt = base/f"{keyname}.crt"
+        if not crt.is_file():
+            gone(crt)
     if not (base/"known_clients").is_dir():
         gone(base/"known_clients")
     if not (base/"known_servers").is_dir():

@@ -43,21 +43,21 @@ identity has already been signed by you.
 In order to introduce someone else to your server, you
 can sign their identity card,
 
-    certified introduce /home/other_user/etc/certified/0.crt \
+    certified introduce /home/other_user/etc/certified/id.crt \
               --scope user \
               --config $HOME/etc/certified \
               >/home/other_user/etc/certified/0/$USER.crt 
 
 
 Of course, UNIX permissions don't allow doing this directly,
-but the basic idea is the same.  Both the other user's `0.crt`
+but the basic idea is the same.  Both the other user's `id.crt`
 file and your returned signature (`crt` file) are public
 documents, and can be exchanged in the open -- for example
 by email or via posting to github.
 
 That user must also setup your server as a trusted service,
 
-    cp $VIRTUAL_ENV/etc/certified/0.crt \
+    cp $VIRTUAL_ENV/etc/certified/id.crt \
        $HOME/etc/certified/trusted_servers/service_name.crt
 
 When that user wants to access the microservice at `$VIRTUAL_ENV`,
@@ -69,9 +69,9 @@ authorization much more precisely.
 Technical explanation: the user access your microservice
 using the combination of,
 
-  * Your `$VIRTUAL_ENV/etc/certified/0.crt` (cacert / trust root)
+  * Your `$VIRTUAL_ENV/etc/certified/id.crt` (cacert / trust root)
   * Your `0/$USER.crt` (certificate chain)
-  * Their `0.key` (private key)
+  * Their `id.key` (private key)
 
 All three ingredients are used in a TLS socket handshake to
 mutually authenticate the client and server to one another.
@@ -84,12 +84,12 @@ and providing the server with your client certificate.
 To use it with the `curl` tool, the command is:
 
     curl --capath $cfg/trusted_servers \
-         --cert $cfg/0/chain_of_trust.crt --key $cfg/0.key \
+         --cert $cfg/0/chain_of_trust.crt --key $cfg/id.key \
          -H "Accept: application/json" \
          https://my-api.org:8000
 
     curl --capath $cfg/trusted_servers \
-         --cert $cfg/0/chain_of_trust.crt --key $cfg/0.key \
+         --cert $cfg/0/chain_of_trust.crt --key $cfg/id.key \
          -H "Accept: application/json" \
          -H "Content-Type: application/json" \
          -X POST --data '{"message":"hello"}' \
