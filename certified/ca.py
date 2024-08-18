@@ -9,7 +9,7 @@ import ssl
 from cryptography import x509
 from cryptography.x509.oid import ExtendedKeyUsageOID
 
-from .cert import FullCert
+from .cert_base import FullCert
 
 from .blob import PublicBlob, PrivateBlob, Blob
 import certified.encode as encode

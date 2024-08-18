@@ -2,7 +2,7 @@
 
 ## Certificate Base Class (cert.FullCert)
 
-::: certified.cert.FullCert
+::: certified.cert_base.FullCert
 
 ## Certificate Authority Class (CA)
 

@@ -1,98 +1,162 @@
-""" A class for holding x509 certificates for which we posess
-    a private key.
-"""
-
-from typing import Optional, List, Callable
+import os
+from typing import Union, Optional, Tuple, List, Any, Callable, Dict
+from urllib.parse import urlparse
+from contextlib import contextmanager
+from pathlib import Path
+import ssl
+import shutil
+import logging
+_logger = logging.getLogger(__name__)
 
 from cryptography import x509
-#from cryptography.hazmat.primitives import hashes
 
-from cryptography.hazmat.primitives.serialization import (
-    load_pem_private_key,
-)
+import certified.layout as layout
+from .ca import CA, LeafCert
+from .wrappers import ssl_context, configure_capath
+from .blob import Pstr
 
-from .blob import PublicBlob, PrivateBlob, Blob, Pstr
-import certified.encode as encode
-from .encode import CertificateIssuerPrivateKeyTypes
+PWCallback = Callable[(), str]
 
-class FullCert:
-    """ A full certificate contains both a certificate and private key.
-    """
-    _certificate: x509.Certificate
-    _private_key: CertificateIssuerPrivateKeyTypes
+def fixed_ssl_context(
+    certfile: str | os.PathLike[str],
+    keyfile: str | os.PathLike[str] | None,
+    password,
+    ssl_version: int,
+    cert_reqs: int,
+    ca_certs: str | os.PathLike[str] | None,
+    ciphers: str | None,
+) -> ssl.SSLContext:
+    ctx = ssl_context(is_client = False)
+    #ctx.verify_mode = ssl.VerifyMode(cert_reqs) # already required by (our) default
+    _logger.info("Using Certified's custom ssl context.")
 
-    def __init__(self, cert_bytes: bytes, private_key_bytes: bytes,
-                 get_pw: Optional[Callable[(), str]] = None) -> None:
-        """Create from an existing cert and private key.
+    if ciphers:
+        ctx.set_ciphers(ciphers)
 
-        Args:
-          cert_bytes: The bytes of the certificate in PEM format
-          private_key_bytes: The bytes of the private key in PEM format
-          get_pw: get the password used to decrypt the key (if a password was set)
-        """
-        #self.parent_cert = None
-        self._certificate = x509.load_pem_x509_certificate(cert_bytes)
-        password : Optional[str] = None
-        if get_pw:
-            password = get_pw()
-        self._private_key = load_pem_private_key(
-                    private_key_bytes, password=password
-        )
+    ctx.load_cert_chain(certfile, keyfile, password)
+    if ca_certs:
+        ca_cert_path = Path(ca_certs)
+        if not ca_cert_path.exists():
+            ctx.load_verify_locations(cadata=ca_certs)
+        elif ca_cert_path.is_dir():
+            _logger.debug("reading certificates in %s to cadata since "
+                    "capath option to load_verify_locations is "
+                    "known not to work", ca_certs)
+            #ctx.load_verify_locations(capath=ca_certs)
+            configure_capath(ctx, ca_cert_path)
+        else:
+            ctx.load_verify_locations(cafile=ca_certs)
+    return ctx
+
+try:
+    import uvicorn
+    uvicorn.config.create_ssl_context = fixed_ssl_context
+except ImportError:
+    uvicorn = None
+
+try:
+    import httpx
+except ImportError:
+    httpx = None
+
+class Certified:
+    def __init__(self, certified_config : Optional[Pstr] = None):
+        self.config = layout.config(certified_config)
+
+    def signer(self):
+        return CA.load(self.config / "CA")
+
+    def identity(self):
+        return LeafCert.load(self.config / "0")
+
+    def ssl_context(self, is_client : bool) -> ssl.SSLContext:
+        ctx = ssl_context(is_client)
+        self.identity().configure_cert( ctx )
+        if is_client:
+            configure_capath(ctx, self.config/"known_servers")
+        else:
+            configure_capath(ctx, self.config/"known_clients")
+        return ctx
 
     @classmethod
-    def load(cls, base : Pstr, get_pw = None):
-        cert = Blob.read(str(base) + ".crt")
-        key  = Blob.read(str(base) + ".key")
-        assert key.is_secret, f"{base+'.key'} has compromised file permissions."
-        return cls(cert.bytes(), key.bytes(), get_pw)
-    
-    def save(self, base : Pstr, overwrite = False):
-        self.cert_pem.write(str(base) + ".crt")
-        self._get_private_key().write(str(base) + ".key")
-
-    @property
-    def certificate(self) -> x509.Certificate:
-        return self._certificate
-
-    @property
-    def cert_pem(self) -> PublicBlob:
-        """`Blob`: The PEM-encoded certificate for this CA. Add this to your
-        trust store to trust this CA."""
-        return PublicBlob(self._certificate)
-
-    def _get_private_key(self) -> PrivateBlob:
-        """`PrivateBlob`: The PEM-encoded private key.
-           You should avoid using this if possible.
+    def new(cls,
+            name1 : x509.Name,
+            name2 : x509.Name,
+            san : x509.SubjectAlternativeName,
+            certified_config : Optional[Pstr] = None,
+            overwrite : bool = False,
+           ) -> "Certified":
+        """ Create a new CA and identity certificate
+        
+        Args:
+          name1: the distinguished name for the signing key
+          name2: the distinguished name for the end-entity
+          san:   subject alternate name fields for both certificates
+          certified_config: base directory to output the new identity
+          overwrite: if True, any existing files will be deleted first
         """
-        return PrivateBlob(self._private_key)
+        ca    = CA.new(name1, san)
+        ident = ca.issue_cert(name2, san)
 
-    def __str__(self) -> str:
-        return str(self.cert_pem)
+        cfg = layout.config(certified_config, False)
+        if overwrite: # remove existing config!
+            try:
+                shutil.rmtree(cfg)
+            except FileNotFoundError:
+                pass
+        else:
+            try:
+                cfg.rmdir() # only succeeds if dir. is empty
+            except FileNotFoundError: # not created yet - OK
+                pass
+            except OSError:
+                raise FileExistsError(cfg)
+        cfg.mkdir(exist_ok=True, parents=True)
 
-    def create_csr(self) -> PublicBlob:
-        """ Generate a CSR.
+        ca.save(cfg / "CA", False)
+        ident.save(cfg / "0", False)
+
+        (cfg/"known_servers").mkdir()
+        (cfg/"known_clients").mkdir()
+        shutil.copy(cfg/"CA.crt", cfg/"known_servers"/"self.crt")
+        shutil.copy(cfg/"CA.crt", cfg/"known_clients"/"self.crt")
+        return cls(cfg)
+
+    @contextmanager
+    def Client(self, base_url, headers : Dict[str,str] = {}):
+        """ Create an httpx.Client context
+            that includes the current identity within
+            its ssl context.
         """
-        # parsing x509
-        # crt.extensions.get_extension_for_class(
-        #        x509.SubjectKeyIdentifier
-        #    )
-        #    sign_key = parent_cert._private_key
-        #    parent_certificate = parent_cert._certificate
-        #    issuer = parent_certificate.subject
-        SAN = self._certificate.extensions.get_extension_for_class(
-                SubjectAlternativeName
-        )
-        # TODO: read key type and call hash_for_key
+        assert httpx is not None, "httpx is not available."
 
-        csr = x509.CertificateSigningRequestBuilder().subject_name(
-            self._certificate.subject
-        ).add_extension(
-            SAN.value,
-            critical=SAN.critical,
-        ).sign(self._private_key) #, hashes.SHA256())
-        return PublicBlob(csr)
+        ssl_ctx = self.ssl_context(is_client = True)
+        with httpx.Client(base_url = base_url,
+                          headers = headers,
+                          verify = ssl_ctx) as client:
+            yield client
 
-    def revoke(self) -> None:
-        # https://cryptography.io/en/latest/x509/reference/#x-509-certificate-revocation-list-builder
-        raise RuntimeError("FIXME: Not implemented.")
+    def serve(self,
+              app : Any,
+              url_str : str,
+              get_passwd : PWCallback = None) -> None:
+        cfg = self.config
+        url = urlparse(url_str)
 
+        if url.scheme == "https":
+            assert url.hostname is not None, "URL must define a hostname."
+            assert url.port is not None, "URL must define a port."
+            assert uvicorn is not None, "uvicorn is not available."
+
+            uvicorn.run(app,
+                        host = url.hostname,
+                        port = url.port,
+                        log_level = "info",
+                        ssl_cert_reqs = ssl.VerifyMode.CERT_REQUIRED,
+                        ssl_ca_certs  = cfg/"known_clients",
+                        ssl_certfile  = cfg/"0.crt",
+                        ssl_keyfile   = cfg/"0.key",
+                        ssl_keyfile_password = get_passwd,
+                        http = "h11")
+        else:
+            raise ValueError(f"Unsupported URL scheme: {url.scheme}")

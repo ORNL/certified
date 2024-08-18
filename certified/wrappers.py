@@ -1,8 +1,17 @@
 from typing import Optional
+from pathlib import Path
 import ssl
 from functools import wraps
 
 from .ca import LeafCert
+
+def configure_capath(ssl_ctx : ssl.SSLContext, capath : Path) -> None:
+    data = "\n".join(f.read_text() \
+                        for f in capath.iterdir() \
+                        if f.suffix in [".crt", ".pem"]
+                    )
+    # Use cadata instead
+    ssl_ctx.load_verify_locations(cadata=data)
 
 def ssl_context(is_client : bool) -> ssl.SSLContext:
     if is_client:
