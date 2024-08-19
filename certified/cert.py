@@ -3,12 +3,14 @@ from typing import Union, Optional, Tuple, List, Any, Dict
 from urllib.parse import urlparse
 from contextlib import contextmanager
 from pathlib import Path
+from datetime import datetime, timedelta, timezone
 import ssl
 import shutil
 import logging
 _logger = logging.getLogger(__name__)
 
 from cryptography import x509
+import biscuit_auth as bis
 
 import certified.layout as layout
 from .encode import append_pseudonym
@@ -84,6 +86,23 @@ class Certified:
         else:
             configure_capath(ctx, self.config/"known_clients")
         return ctx
+
+    def lookup_public_key(self, kid : int) -> bis.PublicKey:
+        pubkey = self.signer().pubkey.public_bytes_raw()
+        if kid is None:
+            return bis.PublicKey.from_bytes( pubkey )
+        return bis.PublicKey.from_bytes( pubkey )
+
+    def biscuit_auth(self, token : str) -> int:
+        biscuit = bis.Biscuit.from_base64(token, self.lookup_public_key)
+        return 1
+        # TODO: check that client certificate SAN matches
+        # the biscuit phrase.
+        authorizer = bis.Authorizer(" time({now}); allow if user($u); ",
+                            {'now': datetime.now(tz = timezone.utc)}
+                     )
+        authorizer.add_token(biscuit)
+        return authorizer.authorize()
 
     @classmethod
     def new(cls,

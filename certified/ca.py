@@ -8,6 +8,10 @@ import ssl
 
 from cryptography import x509
 from cryptography.x509.oid import ExtendedKeyUsageOID
+from cryptography.hazmat.primitives.asymmetric.ed25519 \
+        import Ed25519PrivateKey
+
+import biscuit_auth as bis
 
 from .cert_base import FullCert
 
@@ -45,12 +49,42 @@ class CA(FullCert):
             raise ValueError("BasicConstraints not found.")
             self._path_length = None
 
-    def sign_crt(self, builder) -> x509.Certificate:
+    def sign_cert(self, builder) -> x509.Certificate:
         pubkey = self._certificate.public_key()
         return builder.sign(
             private_key = self._private_key,
             algorithm = encode.hash_for_pubkey(pubkey)
         )
+
+    def sign_biscuit(self, builder : bis.BiscuitBuilder) -> bis.Biscuit:
+        """Sign the biscuit being created.
+
+        Danger: Do not sign biscuits unless you understand
+                their potential use.
+
+        Note: You can use to_base64 on the result to produce a token.
+
+        Args:
+          builder: the Biscuit just before signing
+
+        Example:
+
+        >>> from certified import encode
+        >>> ca = CA.new(encode.person_name("Andrew Jackson"))
+        >>> ca.sign_biscuit(BiscuitBuilder(
+        >>>     "user({user_id}); check if time($time), $time < {expiration};",
+        >>>     { 'user_id': '1234',
+        >>>       'expiration': datetime.now(tz=timezone.utc) \
+        >>>             + timedelta(days=1)
+        >>>     }
+        >>> ))
+        """
+        assert isinstance(self._private_key, Ed25519PrivateKey)
+        return builder.build(
+            bis.PrivateKey.from_bytes(
+                        self._private_key
+                            .private_bytes_raw()
+        ) )
 
     @classmethod
     def new(cls,
@@ -107,7 +141,7 @@ class CA(FullCert):
             cert_builder = cert_builder.add_extension(san, critical=False)
 
         if parent_cert:
-            certificate = parent_cert.sign( cert_builder )
+            certificate = parent_cert.sign_cert( cert_builder )
         else:
             certificate = cert_builder.sign( private_key,
                                   encode.PrivIface(key_type).hash_alg()
@@ -181,25 +215,23 @@ class CA(FullCert):
 
         aki = encode.get_aki(self._certificate)
 
-        cert = (
-            cert_builder_common(
+        cert_builder = cert_builder_common(
                 name,
                 self._certificate.subject,
                 key.public_key(),
                 not_before=not_before,
                 not_after=not_after,
-            )
-            .add_extension(
+        ).add_extension(
                 x509.BasicConstraints(ca=False, path_length=None),
                 critical=True,
-            )
-            .add_extension(aki, critical=False)
-            .add_extension(
+        ).add_extension(
+                aki,
+                critical=False
+        ).add_extension(
                 san,
                 # EE subjectAltName MUST NOT be critical when subject is nonempty
                 critical=False,
-            )
-            .add_extension(
+        ).add_extension(
                 x509.KeyUsage(
                     digital_signature=True,
                     content_commitment=False,
@@ -212,8 +244,7 @@ class CA(FullCert):
                     decipher_only=False,
                 ),
                 critical=True,
-            )
-            .add_extension(
+        ).add_extension(
                 x509.ExtendedKeyUsage(
                     [
                         ExtendedKeyUsageOID.CLIENT_AUTH,
@@ -223,13 +254,9 @@ class CA(FullCert):
                 ),
                 # certificate won't verify if this is True (Certificate extension 2.5.29.37 has incorrect criticality)
                 critical=False,
-            )
-            .sign(
-                private_key=self._private_key,
-                algorithm=encode.hash_for_pubkey(
-                          self._private_key.public_key())
-            )
         )
+
+        cert = self.sign_cert(cert_builder)
 
         return LeafCert(
             PublicBlob(cert).bytes(),
