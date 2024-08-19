@@ -1,7 +1,7 @@
 """ Functionality for generating certificates.
 """
 
-from typing import Optional, List, Tuple
+from typing import Optional, List, Tuple, Any
 from enum import Enum
 import datetime
 import ipaddress
@@ -27,47 +27,56 @@ from cryptography.hazmat.primitives.serialization import (
 
 from .blob import *
 
-__all__ = ["SAN", "name", "PrivIface", "PubIface",
+__all__ = ["SAN", "name", "PrivIface", "hash_for_pubkey",
            "cert_builder_common", "get_aki",
            "CertificateIssuerPrivateKeyTypes",
            "CertificatePublicKeyTypes",
            "append_pseudonym"
           ]
 
-class GenericEC:
-    def __init__(self, instance):
-        self.instance = instance
-    def generate(self):
-        return ec.generate_private_key(self.instance)
+class PrivIface:
+    def __init__(self, keytype : str) -> None:
+        self.ed : Optional[type[
+                    ed25519.Ed25519PrivateKey|ed448.Ed448PrivateKey
+                ] ] = None
+        self.ec : Optional[ Any ] = None
+        if keytype == "ed25519":
+            self.ed = ed25519.Ed25519PrivateKey
+        elif keytype == "ed448":
+            self.ed = ed448.Ed448PrivateKey
+        elif keytype == "secp256r1":
+            self.ec = ec.SECP256R1
+        elif keytype == "secp384r1":
+            self.ec = ec.SECP384R1
+        elif keytype == "secp521r1":
+            self.ec = ec.SECP521R1
+        elif keytype == "secp256k1":
+            self.ec = ec.SECP256K1
+        else:
+            raise KeyError(keytype)
 
-def PrivIface(keytype) -> GenericEC | type[CertificateIssuerPrivateKeyTypes]:
-    if keytype == "ed25519":
-        return ed25519.Ed25519PrivateKey
-    elif keytype == "ed448":
-        return ed448.Ed448PrivateKey
-    elif keytype == "secp256r1":
-        return GenericEC(ec.SECP256R1())
-        #return ec.generate_private_key(ec.SECP256R1())
-    elif keytype == "secp384r1":
-        return GenericEC(ec.SECP384R1())
-    elif keytype == "secp521r1":
-        return GenericEC(ec.SECP521R1())
-    elif keytype == "secp256k1":
-        return GenericEC(ec.SECP256K1())
-    raise KeyError(keytype)
+    def hash_alg(self) -> Optional[hashes.SHA256]:
+        if self.ed:
+            return None
+        return hashes.SHA256()
+        #return hashes.BLAKE2b(64)
+        # cryptography.exceptions.UnsupportedAlgorithm: Hash algorithm "blake2b" not supported for signatures
 
-def hash_for_key(keytype) -> Optional[hashes.SHA256]:
-    if keytype == "ed25519" or keytype == "ed448":
+    def generate(self) -> CertificateIssuerPrivateKeyTypes:
+        if self.ec:
+            return ec.generate_private_key(self.ec())
+        elif self.ed:
+            return self.ed.generate()
+        raise KeyError("Invalid key type.")
+
+    def __eq__(a, b):
+        return a.ed == b.ed and a.ec == b.ec
+
+def hash_for_pubkey(pkey : CertificatePublicKeyTypes
+                   ) -> Optional[hashes.SHA256]:
+    if isinstance(pkey, (ed25519.Ed25519PublicKey, ed448.Ed448PublicKey)):
         return None
-    #return hashes.BLAKE2b(64) # cryptography.exceptions.UnsupportedAlgorithm: Hash algorithm "blake2b" not supported for signatures
     return hashes.SHA256()
-
-def PubIface(keytype) -> type[CertificatePublicKeyTypes]:
-    if keytype == "ed25519":
-        return ed25519.Ed25519PublicKey
-    elif keytype == "ed448":
-        return ed448.Ed448PublicKey
-    raise KeyError(keytype)
 
 def cert_builder_common(
         subject: x509.Name,

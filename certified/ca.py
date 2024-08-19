@@ -45,6 +45,13 @@ class CA(FullCert):
             raise ValueError("BasicConstraints not found.")
             self._path_length = None
 
+    def sign_crt(self, builder) -> x509.Certificate:
+        pubkey = self._certificate.public_key()
+        return builder.sign(
+            private_key = self._private_key,
+            algorithm = encode.hash_for_pubkey(pubkey)
+        )
+
     @classmethod
     def new(cls,
         name : x509.Name,
@@ -67,10 +74,8 @@ class CA(FullCert):
         private_key = encode.PrivIface(key_type).generate() # type: ignore[union-attr]
 
         issuer = name           # A self-issued certificate
-        sign_key = private_key  # self-signature.
         aki: Optional[x509.AuthorityKeyIdentifier] = None
         if parent_cert is not None:
-            sign_key = parent_cert._private_key
             parent_certificate = parent_cert._certificate
             issuer = parent_certificate.subject
             aki = encode.get_aki(parent_certificate)
@@ -81,14 +86,7 @@ class CA(FullCert):
         ).add_extension(
             x509.BasicConstraints(ca=True, path_length=path_length),
             critical=True,
-        )
-
-        if aki:
-            cert_builder = cert_builder.add_extension(aki, critical=False)
-        if san:
-            cert_builder = cert_builder.add_extension(san, critical=False)
-
-        certificate = cert_builder.add_extension(
+        ).add_extension(
             x509.KeyUsage(
                 digital_signature=True,  # OCSP
                 content_commitment=False,
@@ -101,11 +99,19 @@ class CA(FullCert):
                 decipher_only=False,
             ),
             critical=True,
-        ).sign(
-            private_key=sign_key,
-            algorithm=encode.hash_for_key(key_type),
         )
-        # TODO: lookup this algo for the sign_key type.
+
+        if aki:
+            cert_builder = cert_builder.add_extension(aki, critical=False)
+        if san:
+            cert_builder = cert_builder.add_extension(san, critical=False)
+
+        if parent_cert:
+            certificate = parent_cert.sign( cert_builder )
+        else:
+            certificate = cert_builder.sign( private_key,
+                                  encode.PrivIface(key_type).hash_alg()
+                        )
         return cls(PublicBlob(certificate).bytes(),
                    PrivateBlob(private_key).bytes())
 
@@ -220,7 +226,8 @@ class CA(FullCert):
             )
             .sign(
                 private_key=self._private_key,
-                algorithm=encode.hash_for_key(key_type)
+                algorithm=encode.hash_for_pubkey(
+                          self._private_key.public_key())
             )
         )
 
