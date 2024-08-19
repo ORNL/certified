@@ -8,8 +8,11 @@ import ssl
 
 from cryptography import x509
 from cryptography.x509.oid import ExtendedKeyUsageOID
-from cryptography.hazmat.primitives.asymmetric.ed25519 \
-        import Ed25519PrivateKey
+from cryptography.hazmat.primitives.asymmetric import (
+    ed448,
+    ed25519,
+    ec
+)
 
 import biscuit_auth as bis
 
@@ -18,6 +21,36 @@ from .cert_base import FullCert
 from .blob import PublicBlob, PrivateBlob, Blob, PWCallback
 import certified.encode as encode
 from .encode import cert_builder_common
+
+CA_Usage = x509.KeyUsage(
+    digital_signature=True,  # OCSP
+    content_commitment=False,
+    key_encipherment=False,
+    data_encipherment=False,
+    key_agreement=False,
+    key_cert_sign=True,  # sign certs
+    crl_sign=True,  # sign revocation lists
+    encipher_only=False,
+    decipher_only=False,
+)
+EE_Usage = x509.KeyUsage(
+    digital_signature=True,
+    content_commitment=False,
+    key_encipherment=True,
+    data_encipherment=False,
+    key_agreement=False,
+    key_cert_sign=False,
+    crl_sign=False,
+    encipher_only=False,
+    decipher_only=False,
+)
+
+EE_Extension = x509.ExtendedKeyUsage( [
+    ExtendedKeyUsageOID.CLIENT_AUTH,
+    ExtendedKeyUsageOID.SERVER_AUTH,
+    ExtendedKeyUsageOID.CODE_SIGNING,
+] )
+
 
 class CA(FullCert):
     """ CA-s are used only to sign other certificates.
@@ -49,6 +82,82 @@ class CA(FullCert):
             raise ValueError("BasicConstraints not found.")
             self._path_length = None
 
+    def sign_csr(self,
+                 csr : x509.CertificateSigningRequest,
+                 is_ca : bool = False) -> x509.Certificate:
+        """ Sign the given CSR.
+
+        Danger: Do not use this function unless you understand
+                how the resulting certificate will be used.
+
+        Args:
+          csr: the certificate signing request
+          is_ca: is the result a signing key?
+                 If False, the result will be setup as an end-entity.
+        """
+        # Validate and rebuild name
+        name_parts = []
+        for n in csr.subject:
+            # TODO: validate name here.
+            name_parts.append(n)
+        name = x509.Name( name_parts )
+
+        # Validate and rebuild san
+        my_san : Optional[x509.SubjectAlternativeName] = None
+        try:
+            san = csr.extensions.get_extension_for_class(
+                x509.SubjectAlternativeName
+            )
+            assert not is_ca, "non-CA must have SubjectAlternativeName."
+            assert not san.critical, "SubjectAlternativeName must not be marked as critical."
+            san_parts = []
+            for p in san.value:
+                # TODO: validate SAN parts here
+                san_parts.append(p)
+            my_san = x509.SubjectAlternativeName(san_parts)
+        except x509.ExtensionNotFound:
+            assert is_ca, "CSR should not have a SubjectAlternativeName field."
+
+        # Validate key type.
+        pubkey = csr.public_key()
+        if not isinstance(pubkey, (ec.EllipticCurvePublicKey,
+                                    ed25519.Ed25519PublicKey,
+                                    ed448.Ed448PublicKey)):
+            raise ValueError(f"Unsupported key type: {type(pubkey)}")
+
+        path_length : Optional[int] = None
+        if is_ca:
+            assert self._path_length is not None
+            path_length = self._path_length - 1
+            if path_length < 0:
+                raise ValueError("Unable to sign for a CA.")
+
+        issuer = self._certificate.subject
+        cert_builder = cert_builder_common(
+            name, issuer, pubkey,
+            self_signed = False
+        ).add_extension(
+            x509.BasicConstraints(ca=True, path_length=path_length),
+            critical=True,
+        ).add_extension(
+            CA_Usage if is_ca else EE_Usage,
+            critical=True
+        ).add_extension(
+            encode.get_aki(self._certificate),
+            critical=False
+        )
+
+        if not is_ca:
+            cert_builder = cert_builder.add_extension(
+                                EE_Extension,
+                                critical=False)
+
+        if my_san:
+            cert_builder = cert_builder.add_extension(
+                                    my_san, critical=False)
+
+        return self.sign_cert( cert_builder )
+
     def sign_cert(self, builder) -> x509.Certificate:
         pubkey = self._certificate.public_key()
         return builder.sign(
@@ -79,7 +188,7 @@ class CA(FullCert):
         >>>     }
         >>> ))
         """
-        assert isinstance(self._private_key, Ed25519PrivateKey)
+        assert isinstance(self._private_key, ed25519.Ed25519PrivateKey)
         return builder.build(
             bis.PrivateKey.from_bytes(
                         self._private_key
@@ -121,17 +230,7 @@ class CA(FullCert):
             x509.BasicConstraints(ca=True, path_length=path_length),
             critical=True,
         ).add_extension(
-            x509.KeyUsage(
-                digital_signature=True,  # OCSP
-                content_commitment=False,
-                key_encipherment=False,
-                data_encipherment=False,
-                key_agreement=False,
-                key_cert_sign=True,  # sign certs
-                crl_sign=True,  # sign revocation lists
-                encipher_only=False,
-                decipher_only=False,
-            ),
+            CA_Usage,
             critical=True,
         )
 
@@ -232,27 +331,10 @@ class CA(FullCert):
                 # EE subjectAltName MUST NOT be critical when subject is nonempty
                 critical=False,
         ).add_extension(
-                x509.KeyUsage(
-                    digital_signature=True,
-                    content_commitment=False,
-                    key_encipherment=True,
-                    data_encipherment=False,
-                    key_agreement=False,
-                    key_cert_sign=False,
-                    crl_sign=False,
-                    encipher_only=False,
-                    decipher_only=False,
-                ),
+                EE_Usage,
                 critical=True,
         ).add_extension(
-                x509.ExtendedKeyUsage(
-                    [
-                        ExtendedKeyUsageOID.CLIENT_AUTH,
-                        ExtendedKeyUsageOID.SERVER_AUTH,
-                        ExtendedKeyUsageOID.CODE_SIGNING,
-                    ]
-                ),
-                # certificate won't verify if this is True (Certificate extension 2.5.29.37 has incorrect criticality)
+                EE_Extension,
                 critical=False,
         )
 

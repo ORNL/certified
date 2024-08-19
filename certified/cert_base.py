@@ -80,30 +80,26 @@ class FullCert:
     def __str__(self) -> str:
         return str(self.cert_pem)
 
-    def create_csr(self) -> PublicBlob:
+    def create_csr(self) -> x509.CertificateSigningRequest:
         """ Generate a CSR.
         """
-        # parsing x509
-        # crt.extensions.get_extension_for_class(
-        #        x509.SubjectKeyIdentifier
-        #    )
-        #    sign_key = parent_cert._private_key
-        #    parent_certificate = parent_cert._certificate
-        #    issuer = parent_certificate.subject
-        san = self._certificate.extensions.get_extension_for_class(
+        try:
+            san = self._certificate.extensions.get_extension_for_class(
                 x509.SubjectAlternativeName
-        )
-        # TODO: read key type and call hash_for_key
-
+            )
+        except x509.ExtensionNotFound:
+            san = None
+        pubkey = self._certificate.public_key()
         csr = x509.CertificateSigningRequestBuilder().subject_name(
             self._certificate.subject
-        ).add_extension(
-            san.value,
-            critical=san.critical,
-        ).sign(self._private_key, None) #, hashes.SHA256())
-        return PublicBlob(csr)
+        )
+        if san:
+            csr = csr.add_extension(
+                san.value,
+                critical=san.critical,
+            )
+        return csr.sign(self._private_key, encode.hash_for_pubkey(pubkey))
 
     def revoke(self) -> None:
         # https://cryptography.io/en/latest/x509/reference/#x-509-certificate-revocation-list-builder
         raise RuntimeError("FIXME: Not implemented.")
-
