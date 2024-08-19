@@ -45,6 +45,16 @@ The certified package has you covered.
 
 See [documentation](docs) for explanations and howto-s.
 
+# License
+
+Certified is available under a 3-clause BSD-style license,
+available in the file LICENSE.
+
+Portions of certified (as marked in the code) are derived
+from [python-trio/trustme](https://github.com/python-trio/trustme),
+and are made available under the MIT license
+-- as reproduced within those files.
+
 # Installation
 
 As a user, install with

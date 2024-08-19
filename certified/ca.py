@@ -1,6 +1,33 @@
 """ A class for holding x509 signing certificates (CA)
     and leaf certificates (LeafCert)
 """
+# Code in this file was originally derived from
+# https://github.com/python-trio/trustme
+#
+# It was made available from that project under terms of the
+# MIT license, reproduced here:
+#
+# The MIT License (MIT)
+#
+# Permission is hereby granted, free of charge, to any person obtaining
+# a copy of this software and associated documentation files (the
+# "Software"), to deal in the Software without restriction, including
+# without limitation the rights to use, copy, modify, merge, publish,
+# distribute, sublicense, and/or sell copies of the Software, and to
+# permit persons to whom the Software is furnished to do so, subject to
+# the following conditions:
+#
+# The above copyright notice and this permission notice shall be
+# included in all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+# EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+# MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+# NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+# LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+# OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+# WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
 
 from typing import Optional, List, Callable
 import datetime
@@ -54,12 +81,13 @@ EE_Extension = x509.ExtendedKeyUsage( [
 
 class CA(FullCert):
     """ CA-s are used only to sign other certificates.
-        This design is required if one wants to use keys
+        Separating CA-s from the `LeafCert`-s used to authenticate
+        TLS participants is required if one wants to use keys
         for either signing or key derivation, but not both.
 
-        Note that while elliptic curve keys can be used for
-        both signing and key exchange, this is
-        bad [cryptographic practice](https://crypto.stackexchange.com/a/3313).
+        Note that while elliptic curve keys can technically
+        be used for both signing and key exchange, this is considered
+        [bad cryptographic practice](https://crypto.stackexchange.com/a/3313).
         Instead, users should generate separate signing and ECDH keys.
     """
 
@@ -103,20 +131,19 @@ class CA(FullCert):
         name = x509.Name( name_parts )
 
         # Validate and rebuild san
-        my_san : Optional[x509.SubjectAlternativeName] = None
+        san_parts = []
         try:
             san = csr.extensions.get_extension_for_class(
                 x509.SubjectAlternativeName
             )
-            assert not is_ca, "non-CA must have SubjectAlternativeName."
-            assert not san.critical, "SubjectAlternativeName must not be marked as critical."
-            san_parts = []
             for p in san.value:
                 # TODO: validate SAN parts here
                 san_parts.append(p)
-            my_san = x509.SubjectAlternativeName(san_parts)
         except x509.ExtensionNotFound:
-            assert is_ca, "CSR should not have a SubjectAlternativeName field."
+            assert is_ca, "non-CA must include a SubjectAltName"
+
+        if not is_ca or len(name_parts) == 0:
+            assert len(san_parts) > 0, "SubjectAltName must be non-empty."
 
         # Validate key type.
         pubkey = csr.public_key()
@@ -150,15 +177,27 @@ class CA(FullCert):
         if not is_ca:
             cert_builder = cert_builder.add_extension(
                                 EE_Extension,
-                                critical=False)
+                                critical = False)
 
-        if my_san:
+        if len(san_parts) > 0:
+            # Mark SAN critical iff Name is empty
             cert_builder = cert_builder.add_extension(
-                                    my_san, critical=False)
+                    x509.SubjectAlternativeName(san_parts),
+                    critical = len(name_parts) == 0 )
 
         return self.sign_cert( cert_builder )
 
     def sign_cert(self, builder) -> x509.Certificate:
+        """ Sign a certificate.
+
+            Danger: Do not use this function unless you understand
+                    how the resulting certificate will be used.
+
+            Note: Consider using `sign_csr` instead of this function.
+
+        Args:
+          builder: the certificate builder before signature
+        """
         pubkey = self._certificate.public_key()
         return builder.sign(
             private_key = self._private_key,
@@ -370,7 +409,6 @@ class LeafCert(FullCert):
       private_key_and_cert_chain_pem (`Blob`): A single `Blob` containing the
           concatenation of the PEM-encoded private key and the PEM-encoded
           cert chain.
-
     """
 
     def __init__(self,
@@ -402,9 +440,4 @@ class LeafCert(FullCert):
         # Currently need a temporary file for this, see:
         #   https://bugs.python.org/issue16487
         with self.private_key_and_cert_chain_pem.tempfile() as path:
-            try:
-                ctx.load_cert_chain(path)
-            except:
-                #print("Path contents:")
-                #print(self.private_key_and_cert_chain_pem.bytes().decode("ascii"))
-                raise
+            ctx.load_cert_chain(path)

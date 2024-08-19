@@ -1,4 +1,4 @@
-""" Functionality for generating certificates.
+""" Functionality for encoding parts of x509 certificates.
 """
 
 from typing import Optional, List, Tuple, Any
@@ -78,44 +78,6 @@ def hash_for_pubkey(pkey : CertificatePublicKeyTypes
         return None
     return hashes.SHA256()
 
-def cert_builder_common(
-        subject: x509.Name,
-        issuer: x509.Name,
-        public_key: CertificatePublicKeyTypes,
-        not_before: Optional[datetime.datetime] = None,
-        not_after: Optional[datetime.datetime] = None,
-        self_signed: bool = False,
-    ) -> x509.CertificateBuilder:
-    """
-    Common part of the certificate building process.
-
-    Factored into some re-usable code that automatically
-    sets up valid date ranges and checks that your
-    name won't collide with what you're signing.
-    """
-    not_before = not_before if not_before else datetime.datetime.now(datetime.timezone.utc)
-    # default valid for ~1 years
-    not_after = not_after if not_after else (
-            not_before + datetime.timedelta(days=365)
-    )
-    if self_signed:
-        assert subject == issuer, "Self-signed certificate, but subject != issuer"
-    else:
-       assert subject != issuer, "Cannot have subject == issuer for normal certificate."
-
-    return (
-        x509.CertificateBuilder()
-            . subject_name(subject)
-            . issuer_name(issuer)
-            . public_key(public_key)
-            . not_valid_before(not_before)
-            . not_valid_after(not_after)
-            . serial_number(x509.random_serial_number())
-            . add_extension(
-                x509.SubjectKeyIdentifier.from_public_key(public_key),
-                critical=False,
-            )
-    )
 
 def person_name(
     name : str,
@@ -215,6 +177,77 @@ def append_pseudonym(name : x509.Name, ps : str) -> x509.Name:
     parts.append( x509.NameAttribute(NameOID.PSEUDONYM, ps) )
     return x509.Name(parts)
 
+# Code in this function was originally derived from
+# https://github.com/python-trio/trustme
+#
+# It was made available from that project under terms of the
+# MIT license, reproduced here:
+#
+# The MIT License (MIT)
+#
+# Permission is hereby granted, free of charge, to any person obtaining
+# a copy of this software and associated documentation files (the
+# "Software"), to deal in the Software without restriction, including
+# without limitation the rights to use, copy, modify, merge, publish,
+# distribute, sublicense, and/or sell copies of the Software, and to
+# permit persons to whom the Software is furnished to do so, subject to
+# the following conditions:
+#
+# The above copyright notice and this permission notice shall be
+# included in all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+# EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+# MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+# NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+# LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+# OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+# WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+def cert_builder_common(
+        subject: x509.Name,
+        issuer: x509.Name,
+        public_key: CertificatePublicKeyTypes,
+        not_before: Optional[datetime.datetime] = None,
+        not_after: Optional[datetime.datetime] = None,
+        self_signed: bool = False,
+    ) -> x509.CertificateBuilder:
+    """
+    Common part of the certificate building process.
+
+    Factored into some re-usable code that automatically
+    sets up valid date ranges and checks that your
+    name won't collide with what you're signing.
+    """
+    not_before = not_before if not_before else datetime.datetime.now(datetime.timezone.utc)
+    # default valid for ~1 years
+    not_after = not_after if not_after else (
+            not_before + datetime.timedelta(days=365)
+    )
+    if self_signed:
+        assert subject == issuer, "Self-signed certificate, but subject != issuer"
+    else:
+       assert subject != issuer, "Cannot have subject == issuer for normal certificate."
+
+    return (
+        x509.CertificateBuilder()
+            . subject_name(subject)
+            . issuer_name(issuer)
+            . public_key(public_key)
+            . not_valid_before(not_before)
+            . not_valid_after(not_after)
+            . serial_number(x509.random_serial_number())
+            . add_extension(
+                x509.SubjectKeyIdentifier.from_public_key(public_key),
+                critical=False,
+            )
+    )
+
+# Code in this function was originally derived from
+# https://github.com/python-trio/trustme
+#
+# It was made available from that project under terms of the
+# MIT license, reproduced in this file just
+# above the cert_builder_common function.
 def _host(host):
     # Have to try ip_address first, because ip_network("127.0.0.1") is
     # interpreted as being the network 127.0.0.1/32. Which I guess would be

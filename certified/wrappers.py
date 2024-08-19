@@ -13,17 +13,23 @@ def configure_capath(ssl_ctx : ssl.SSLContext, capath : Path) -> None:
     # Use cadata instead
     ssl_ctx.load_verify_locations(cadata=data)
 
-def ssl_context(is_client : bool) -> ssl.SSLContext:
+def ssl_context(is_client : bool,
+                allow_TLS_1_2 : bool = False) -> ssl.SSLContext:
     if is_client:
         ssl_ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
         ssl_ctx.verify_mode = ssl.VerifyMode.CERT_REQUIRED
     else:
         ssl_ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        ssl_ctx.verify_mode = ssl.VerifyMode.CERT_REQUIRED # mTLS
+        # mostly default since 3.6, but set explicitly anyway
         ssl_ctx.options |= ssl.OP_SINGLE_DH_USE
         ssl_ctx.options |= ssl.OP_SINGLE_ECDH_USE
-        ssl_ctx.verify_mode = ssl.VerifyMode.CERT_REQUIRED # mTLS
-    #ssl_ctx.minimum_version = ssl.TLSVersion.TLSv1_2
-    ssl_ctx.minimum_version = ssl.TLSVersion.TLSv1_3
+        ssl_ctx.options |= ssl.OP_NO_RENEGOTIATION
+        ssl_ctx.options |= ssl.OP_NO_COMPRESSION
+    if allow_TLS_1_2:
+        ssl_ctx.minimum_version = ssl.TLSVersion.TLSv1_2
+    else:
+        ssl_ctx.minimum_version = ssl.TLSVersion.TLSv1_3
     return ssl_ctx
 
 def ssl_ify(client_or_server : str):
