@@ -15,7 +15,10 @@ import typer
 
 from certified import Certified
 import certified.encode as encode
+from certified.blob import PublicBlob
 from .ca import CA
+
+from cryptography import x509
 
 #from actor_api.grant import Grant
 #from actor_api.validation import signGrant, validateGrant
@@ -106,26 +109,19 @@ Example: 'Computing Directorate'
     print(f"Generated new config for {xname.rfc4514_string()} at {cert.config}.")
     return 0
 
-def str_to_set(s):
-    return set(s.split())
-
 @app.command()
 def introduce(crt : Annotated[
                         Path,
                         typer.Argument(help="Subject's certificate.")
                     ],
-              my_scopes : Annotated[
-                        str,
-                        typer.Argument(help="Whitespace-separated list of scopes you trust the subject for.")
-                    ] = "",
               add_client : Annotated[
-                        bool,
-                        typer.Argument(help="Add the subject directly to known_clients.")
-                    ] = False,
+                        str,
+                        typer.Option(help="Add the subject directly to known_clients as <name>.")
+                    ] = "",
               add_server : Annotated[
-                        bool,
-                        typer.Argument(help="Add the subject directly to known_servers.")
-                    ] = False,
+                        str,
+                        typer.Option(help="Add the subject directly to known_servers as <name>.")
+                    ] = "",
               config : Config = None):
     """
     Write an introduction for the subject named by the
@@ -157,16 +153,20 @@ def introduce(crt : Annotated[
     """
 
     cert = Certified(config)
-    scopes = str_to_set(my_scopes)
 
-    # TODO: the signing part...
-    print(cert)
+    pem_data = crt.read_bytes()
+    try:
+        csr = x509.load_pem_x509_csr(pem_data)
+    except ValueError:
+        csr = x509.load_pem_x509_certificate(pem_data)
+    signed = cert.signer().sign_csr( csr )
+    print( PublicBlob(signed).bytes().decode("utf-8").rstrip() )
 
     # TODO: implement add_client and add_server
-    if add_client:
-        raise NotImplementedError()
-    if add_server:
-        raise NotImplementedError()
+    if add_client != "":
+        cert.add_client(add_client, signed)
+    if add_server != "":
+        cert.add_server(add_server, signed)
 
 """
 @app.command()

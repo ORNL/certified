@@ -29,7 +29,7 @@
 # WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 
-from typing import Optional, List, Callable
+from typing import Optional, List, Set, Callable
 import datetime
 import ssl
 
@@ -111,9 +111,11 @@ class CA(FullCert):
             self._path_length = None
 
     def sign_csr(self,
-                 csr : x509.CertificateSigningRequest,
+                 csr : x509.CertificateSigningRequest | x509.Certificate,
                  is_ca : bool = False) -> x509.Certificate:
-        """ Sign the given CSR.
+        """ Sign the given CSR (or re-sign the certificate).
+
+        TODO: combine all 3 signing functions to use this one.
 
         Danger: Do not use this function unless you understand
                 how the resulting certificate will be used.
@@ -123,6 +125,9 @@ class CA(FullCert):
           is_ca: is the result a signing key?
                  If False, the result will be setup as an end-entity.
         """
+        if isinstance(csr, x509.CertificateSigningRequest):
+            assert csr.is_signature_valid(), "CSR has invalid signature!"
+
         # Validate and rebuild name
         name_parts = []
         for n in csr.subject:

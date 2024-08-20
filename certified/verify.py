@@ -39,6 +39,13 @@ def show_cert(pem : str) -> None:
     print(cert.not_valid_before_utc)
     print(cert.not_valid_after_utc)
 
+def contains_domain_validated(policies : x509.CertificatePolicies) -> bool:
+    # example checking for this specific policy ID.
+    return any(
+        policy.policy_identifier.dotted_string == "2.23.140.1.2.1"
+        for policy in policies
+    )
+
 if __name__ == "__main__":
     import sys
     show_cert(sys.argv[1])

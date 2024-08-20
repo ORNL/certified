@@ -1,3 +1,6 @@
+# Ensure that the child_server functionality (used for testing)
+# is working, before blaming other things that might go wrong.
+#
 from certified.test import child_server
 
 def echo(sock):

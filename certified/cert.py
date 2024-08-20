@@ -16,7 +16,7 @@ import certified.layout as layout
 from .encode import append_pseudonym
 from .ca import CA, LeafCert
 from .wrappers import ssl_context, configure_capath
-from .blob import Pstr, PWCallback
+from .blob import Pstr, PWCallback, PublicBlob
 
 def fixed_ssl_context(
     certfile: str | os.PathLike[str],
@@ -87,7 +87,36 @@ class Certified:
             configure_capath(ctx, self.config/"known_clients")
         return ctx
 
+    def add_client(self,
+                   name:Pstr,
+                   cert:x509.Certificate,
+                   replace:bool = False) -> None:
+        """ Add the certificate to `known_clients`
+            with the given name.
+        """
+        self._add_known(self.config / "known_clients" / f"{str(name)}.crt",
+                        cert, replace)
+
+    def add_server(self,
+                   name:Pstr,
+                   cert:x509.Certificate,
+                   replace:bool = False) -> None:
+        """ Add the certificate to `known_servers`
+            with the given name.
+        """
+        self._add_known(self.config / "known_servers" / f"{str(name)}.crt",
+                        cert, replace)
+
+    def _add_known(self,
+                   fname:Path,
+                   cert:x509.Certificate,
+                   replace:bool) -> None:
+        if not replace and fname.exists():
+            raise FileExistsError(fname)
+        PublicBlob(cert).write(fname)
+
     def lookup_public_key(self, kid : int) -> bis.PublicKey:
+        # FIXME: use key serial numbers
         pubkey = self.signer().pubkey.public_bytes_raw()
         if kid is None:
             return bis.PublicKey.from_bytes( pubkey )
