@@ -126,7 +126,7 @@ class CA(FullCert):
                  If False, the result will be setup as an end-entity.
         """
         if isinstance(csr, x509.CertificateSigningRequest):
-            assert csr.is_signature_valid(), "CSR has invalid signature!"
+            assert csr.is_signature_valid, "CSR has invalid signature!"
 
         # Validate and rebuild name
         name_parts = []

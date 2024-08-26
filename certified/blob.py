@@ -21,21 +21,14 @@ Pstr = Union[str, "os.PathLike[str]"]
 PWCallback = Optional[Callable[[], bytes]]
 
 @contextmanager
-def set_umask(umask):
-    prev_umask = os.umask(umask)
-    try:
-        yield
-    finally:
-        os.umask(prev_umask)
-
-@contextmanager
 def new_file(fname : Pstr, mode : str, perm : int,
              remove=False) -> Iterator[IO[Any]]:
     """ Fix the file open() API to create
         new files securely.
+
+        Ref: https://stackoverflow.com/questions/5624359/write-file-with-specific-permissions-in-python @Asclepius
     """
     flags = os.O_RDWR | os.O_CREAT | os.O_EXCL
-    #umask = 0o777 ^ perm  # Prevents always downgrading umask to 0.
 
     if remove:
         try:
@@ -43,7 +36,6 @@ def new_file(fname : Pstr, mode : str, perm : int,
         except FileNotFoundError:
             pass
 
-    #with set_umask(umask):
     # open fails if file exists
     fdesc = os.open(fname, flags, perm)
     with os.fdopen(fdesc, mode) as f:

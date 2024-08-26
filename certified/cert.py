@@ -1,6 +1,7 @@
 import os
-from typing import Union, Optional, Tuple, List, Any, Dict
-from urllib.parse import urlparse
+from typing import Union, Optional, Tuple, List, Any, Dict, Set
+from urllib.parse import urlparse, urlunparse
+from urllib.parse import ParseResult as URL
 from contextlib import contextmanager
 from pathlib import Path
 from datetime import datetime, timedelta, timezone
@@ -9,6 +10,7 @@ import shutil
 import logging
 _logger = logging.getLogger(__name__)
 
+import yaml # type: ignore[import-untyped]
 from cryptography import x509
 import biscuit_auth as bis
 
@@ -16,7 +18,8 @@ import certified.layout as layout
 from .encode import append_pseudonym
 from .ca import CA, LeafCert
 from .wrappers import ssl_context, configure_capath
-from .blob import Pstr, PWCallback, PublicBlob
+from .blob import Pstr, PWCallback, Blob, PublicBlob
+from .models import TrustedService
 
 def fixed_ssl_context(
     certfile: str | os.PathLike[str],
@@ -68,6 +71,29 @@ try:
 except ImportError:
     httpx = None # type: ignore[assignment]
 
+def replace_baseurl(url : URL, new_base : str) -> URL:
+    """ Replace url's netloc with new_base,
+        and prepend the path from new_base to url.path.
+
+        Leaves all other parts of url unchanged.
+    """
+    new = urlparse(new_base)
+    assert new.scheme   == url.scheme, "Cannot change protocol scheme."
+    assert new.port is None or new.netloc == f"{new.hostname}:{new.port}", "URL's netloc must define only a hostname and port."
+    assert new.params   == "", "URL must not contain params"
+    assert new.query    == "", "URL must not contain query"
+    assert new.fragment == "", "URL must not contain fragment"
+
+    new_path = Path(new.path) / url.path.lstrip("/")
+
+    return URL(scheme   = url.scheme,
+               netloc   = new.netloc,
+               path     = str(new_path),
+               params   = url.params,
+               query    = url.query,
+               fragment = url.fragment)
+               
+
 class Certified:
     def __init__(self, certified_config : Optional[Pstr] = None):
         self.config = layout.config(certified_config)
@@ -78,11 +104,68 @@ class Certified:
     def identity(self):
         return LeafCert.load(self.config / "id")
 
-    def ssl_context(self, is_client : bool) -> ssl.SSLContext:
+    def lookup_server(self, name) -> Optional[TrustedService]:
+        """ Check if the server is known.
+
+            If so, return the service's config.
+        """
+        server = self.config / "known_servers" / f"{name}.yaml"
+        if not server.exists():
+            return None
+        with open(server, "r", encoding="utf-8") as f:
+            cfg = yaml.safe_load(f)
+        return TrustedService.model_validate(cfg)
+
+    def get_chain_from(self, signers : Set[str]) -> Tuple[bytes, bytes]:
+        """ Get a certificate chain from
+            any of the signers to either "id.crt" (preferred)
+            or "CA.crt" -> "id.crt" (second choice).
+
+            Returns the appropriate end-entity certificate
+            along with a concatenation of all the certificates
+            in the chain.
+        """
+        if (self.config / "id").is_dir():
+            for fname in (self.config / "id").iterdir():
+                if fname.suffix != ".crt":
+                    continue
+                if fname.stem in signers:
+                    # ee-cert signed directly by a signer, just return it.
+                    return fname.read_bytes(), b""
+
+        if (self.config / "CA").is_dir():
+            for fname in (self.config / "CA").iterdir():
+                if fname.suffix != ".crt":
+                    continue
+                if fname.stem in signers:
+                    # CA was signed by signer. Return my id.crt and the CA chain.
+                    crt = (self.config / "id.crt").read_bytes()
+                    return crt, fname.read_bytes()
+
+        raise KeyError(f"Unable to find any certificate signed from any authorizers in ({signers}).")
+
+    def ssl_context(self,
+                    is_client : bool,
+                    srv : Optional[TrustedService] = None
+                   ) -> ssl.SSLContext:
+        if srv is not None:
+            assert is_client, "Must be client to use TrustedService cfg."
         ctx = ssl_context(is_client)
-        self.identity().configure_cert( ctx )
+        if not srv or len(srv.auths) == 0:
+            self.identity().configure_cert(ctx)
+        else: # lookup any signature trusted by the server
+            crt, chain = self.get_chain_from(srv.auths)
+            keyfile = self.config / "id.key"
+            key  = Blob.read(keyfile)
+            assert key.is_secret, f"{keyfile} has compromised file permissions."
+            LeafCert(crt, key.bytes(), chain_to_ca=[chain]).configure_cert(ctx)
+            
         if is_client:
-            configure_capath(ctx, self.config/"known_servers")
+            if srv is None:
+                configure_capath(ctx, self.config/"known_servers")
+            else:
+                # Use the server's specific certificate.
+                ctx.load_verify_locations(cadata=srv.cert)
         else:
             configure_capath(ctx, self.config/"known_clients")
         return ctx
@@ -183,8 +266,20 @@ class Certified:
         """
         assert httpx is not None, "httpx is not available."
 
-        ssl_ctx = self.ssl_context(is_client = True)
-        with httpx.Client(base_url = base_url,
+        # Check whether this server corresponds to
+        # a known host.
+        url = urlparse(base_url)
+        assert url.port is None \
+                or url.netloc == f"{url.hostname}:{url.port}", "URL's netloc must define only a hostname and port."
+
+        srv = self.lookup_server(url.hostname)
+        if srv:
+            url = replace_baseurl(url, srv.url)
+
+        new_base = urlunparse(url)
+
+        ssl_ctx = self.ssl_context(True, srv)
+        with httpx.Client(base_url = new_base,
                           headers = headers,
                           verify = ssl_ctx) as client:
             yield client
@@ -199,6 +294,12 @@ class Certified:
         if url.scheme == "https":
             assert url.hostname is not None, "URL must define a hostname."
             assert url.port is not None, "URL must define a port."
+            assert url.netloc == f"{url.hostname}:{url.port}", "URL's netloc must define only a hostname and port."
+            assert url.path == "", "Cannot serve a sub-path."
+            assert url.params == "", "Cannot handle URL parameters."
+            assert url.query == "", "Cannot serve specific query."
+            assert url.fragment == "", "Cannot serve specific fragment"
+
             assert uvicorn is not None, "uvicorn is not available."
 
             uvicorn.run(app,

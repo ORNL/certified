@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional, List, Set
 from typing_extensions import Annotated
+from urllib.parse import urlsplit, urlunsplit
 
 import logging
 _logger = logging.getLogger(__name__)
@@ -16,6 +17,7 @@ import typer
 from certified import Certified
 import certified.encode as encode
 from certified.blob import PublicBlob
+import certified.loki as setup_loki
 from .ca import CA
 
 from cryptography import x509
@@ -155,6 +157,7 @@ def introduce(crt : Annotated[
     cert = Certified(config)
 
     pem_data = crt.read_bytes()
+    csr : x509.Certificate | x509.CertificateSigningRequest
     try:
         csr = x509.load_pem_x509_csr(pem_data)
     except ValueError:
@@ -206,6 +209,10 @@ def serve(app : Annotated[
                   typer.Argument(help="URL to serve application",
                        rich_help_panel="Example: https://127.0.0.1:8000")
                 ] = "https://0.0.0.0:4433",
+          loki : Annotated[
+                  Optional[Path],
+                  typer.Option(help="json file containing url,user,passwd for sending logs to loki")
+                ] = None,
           v : bool = typer.Option(False, "-v", help="show info-level logs"),
           vv : bool = typer.Option(False, "-vv", help="show debug-level logs"),
           config : Config = None):
@@ -218,11 +225,11 @@ def serve(app : Annotated[
         logging.basicConfig(level=logging.INFO)
 
     cert = Certified(config)
-    _logger.info("Running %s", app)
+    if loki: # setup logging
+        setup_loki.configure(str(app), loki)
+    _logger.info("Running %s %s", __name__, app)
     cert.serve(app, url)
     _logger.info("Exited %s", app)
 
 # TODO: list out identities (and key types) of all known clients or servers
 # TODO: print logs of all successful and unsuccessful authentications
-if __name__ == "__main__":
-    app()

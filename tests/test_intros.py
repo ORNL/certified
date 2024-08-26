@@ -73,6 +73,9 @@ def test_intro(tmp_path : Path) -> None:
                             "--config", str(cli)])
                 if result.exit_code == 0:
                     break
+                # This error indicates SSL handshake failed.
+                if isinstance(result.exception, httpx.RemoteProtocolError):
+                    break
             except httpx.ConnectError:
                 continue
         assert not connected, "Connection should not succeed."

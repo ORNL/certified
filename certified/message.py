@@ -3,7 +3,7 @@
 import os
 import json
 from enum import Enum
-from typing import Optional
+from typing import Optional, Dict
 from typing_extensions import Annotated
 
 import logging
@@ -50,8 +50,11 @@ Example: '{"refs": [1,2], "query": "What's the weather?"}'
         X = HTTPMethod.POST if data else HTTPMethod.GET
 
     cert = Certified(config)
+    headers : Dict[str,str] = {}
+    if data:
+        headers["Content-Type"] = "application/json"
 
-    with cert.Client() as cli:
+    with cert.Client(headers=headers) as cli:
         if data:
             ddata = json.loads(data)
             req = Request(X.value, url, json=ddata)
