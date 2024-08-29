@@ -29,7 +29,7 @@
 # WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 
-from typing import Optional, List, Set, Callable
+from typing import Optional, List, Callable
 import datetime
 import ssl
 

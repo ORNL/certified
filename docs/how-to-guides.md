@@ -46,25 +46,36 @@ or microservice) to talk to your server.
 
 Both require that the client setup your server as a trusted service:
 
-    certified add-service anapi $VIRTUAL_ENV/etc/certified/id.crt \
+    certified add-service anapi $VIRTUAL_ENV/etc/certified/CA.crt \
        --config $HOME/etc/certified
 
 When that user wants to access the microservice at `$VIRTUAL_ENV`,
 they can now do so by using `message https://anapi:<port>/path`.
 
+Technical Note: There *should* be nothing wrong with adding
+the server's `id.crt` instead of `CA.crt` as the service
+certificate.  However, SSL fails to validate this with the error:
+
+    ConnectError(SSLCertVerificationError(1, '[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: self-signed certificate in certificate chain (_ssl.c:1007)')) 
+
+This is because TLS is over-complicated and puts too much trust
+at the top.  We should really be doing our own certificate chain
+validation instead of using the TLS model.
+
 * Method 1: direct client addition
 
-    either copy CA.crt (as the example above) or id.crt to the
-    server's `trusted_clients`:
+    copy CA.crt (as the example above) to the server's `trusted_clients`:
 
-        cp $HOME/etc/certified/id.crt \
+        cp $HOME/etc/certified/CA.crt \
            $VIRTUAL_ENV/etc/certified/trusted_clients/$USER.crt
+
+    This allows all identities signed by `CA.crt` to authenticate
+    to your server.
 
 * Method 2: introduction
 
     An "authorizor" can introduce someone else to your server,
-    by signing their identity.
-
+    by signing their identity:
 
         certified introduce /home/other_user/etc/certified/id.crt \
                   --scope user \
@@ -79,12 +90,12 @@ they can now do so by using `message https://anapi:<port>/path`.
     documents, and can be exchanged in the open -- for example
     by email or via posting to github.
 
-    Note -- the service trusts itself as an authorizor by
+    Technical Note: the service trusts itself as an authorizor by
     default because `CA.crt` is copied to the service's `trusted_clients`
     directory on creation.  Other authorizors can be added
     by placing their `CA.crt` into `$VIRTUAL_ENV/etc/certified/known_clients`
-    under any name (`<name>.crt`).  Usually, your organization
-    would provide an authorizor that you can use.
+    under any name (`<name>.crt`).  Your organization **should**
+    provide an authorizor that you can use.
 
 <!--
 Note that you should not generally authorize
@@ -111,6 +122,9 @@ using:
   * Their `known_servers/*.crt` (cacert / trust roots)
   * Their `id.crt` (self-signed certificate chain from user's `CA.crt`)
   * Their `id.key` (private key)
+
+These 3 ingredients (with the exception of using `known_clients/*.crt` as
+trust roots are also the ones used by the server to authenticate clients.
 
 ## Run an API Client
 

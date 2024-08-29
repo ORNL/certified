@@ -1,6 +1,6 @@
 import os
 import asyncio
-from typing import Union, Optional, Tuple, List, Any, Dict, Set
+from typing import Union, Optional, Tuple, List, Any, Dict
 from urllib.parse import urlparse, urlunparse
 from urllib.parse import ParseResult as URL
 from contextlib import contextmanager
@@ -87,6 +87,7 @@ def replace_baseurl(url : URL, new_base : str) -> URL:
 
     # find host:port combination.
     host = new.hostname
+    assert host is not None
     port = new.port
     if port is None:
         assert new.netloc == new.hostname, "URL's netloc must define only a hostname and optional port."
@@ -101,7 +102,7 @@ def replace_baseurl(url : URL, new_base : str) -> URL:
     else:
         new_path = str(PurePosixPath(new.path) / url.path.lstrip("/"))
     return URL(scheme   = url.scheme,
-               netloc = f"{host}:{port}" if port else host,
+               netloc   = f"{host}:{port}" if port else host,
                path     = new_path,
                params   = url.params,
                query    = url.query,
@@ -130,7 +131,7 @@ class Certified:
             cfg = yaml.safe_load(f)
         return TrustedService.model_validate(cfg)
 
-    def get_chain_from(self, signers : Set[str]) -> Tuple[bytes, bytes]:
+    def get_chain_from(self, auths : List[str]) -> Tuple[bytes, bytes]:
         """ Get a certificate chain from
             any of the signers to either "id.crt" (preferred)
             or "CA.crt" -> "id.crt" (second choice).
@@ -139,6 +140,7 @@ class Certified:
             along with a concatenation of all the certificates
             in the chain.
         """
+        signers = set(auths)
         if (self.config / "id").is_dir():
             for fname in (self.config / "id").iterdir():
                 if fname.suffix != ".crt":
@@ -189,10 +191,10 @@ class Certified:
         return ctx
 
     def add_client(self,
-                   name:Pstr,
-                   cert:x509.Certificate,
-                   scopes:Set[str] = set(),
-                   overwrite:bool = False) -> None:
+                   name: Pstr,
+                   cert: x509.Certificate,
+                   scopes: List[str] = [],
+                   overwrite: bool = False) -> None:
         """ Add the certificate to `known_clients`
             with the given name.
         """
@@ -201,10 +203,10 @@ class Certified:
             raise FileExistsError(fname)
         PublicBlob(cert).write(fname)
 
-    def add_server(self,
-                   name : Pstr,
-                   srv  : TrustedService,
-                   overwrite:bool = False) -> None:
+    def add_service(self,
+                    name : Pstr,
+                    srv  : TrustedService,
+                    overwrite:bool = False) -> None:
         """ Add the certificate to `known_servers`
             with the given info.  See `TrustedService`
             for documentation on the attributes.
@@ -296,11 +298,11 @@ class Certified:
 
         srv = self.lookup_server(url.hostname)
         if srv:
-            old_url = url
             url = replace_baseurl(url, srv.url)
-            _logger.debug("Replaced %s with %s", old_url, url)
 
         new_base = urlunparse(url)
+        if srv:
+            _logger.debug("Replaced %s with %s", base_url, new_base)
 
         ssl_ctx = self.ssl_context(True, srv)
         with httpx.Client(base_url = new_base,

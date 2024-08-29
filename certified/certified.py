@@ -5,7 +5,7 @@ import importlib
 import asyncio
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Optional, List, Set
+from typing import Optional, List
 from typing_extensions import Annotated
 from urllib.parse import urlsplit, urlunsplit
 
@@ -25,7 +25,6 @@ from cryptography import x509
 #from actor_api.validation import signGrant, validateGrant
 #from actor_api.crypto import gen_key, gen_keypair, get_verifykey, get_pubkey
 #from actor_api.actor_test import cli_srv, srv_sign
-#from actor_api.type_alias import str_to_set
 
 app = typer.Typer()
 
@@ -175,7 +174,7 @@ def add_client(name : Annotated[
 
     pem_data = crt.read_bytes()
     c = x509.load_pem_x509_certificate(pem_data)
-    cert.add_client(name, c, set(scopes.split()), overwrite)
+    cert.add_client(name, c, scopes.split(), overwrite)
 
 @app.command()
 def add_service(name : Annotated[
@@ -207,13 +206,16 @@ def add_service(name : Annotated[
     pem_data = crt.read_bytes()
     c = x509.load_pem_x509_certificate(pem_data)
 
+    if name not in auth: # services generally trust thes'selvs
+        auth.append(name) 
+
     urls = encode.get_urls(c)
     assert len(urls) > 0, "Error! Server certificate defines no hostname-s."
     srv = TrustedService(
               url = f"https://{urls[0]}",
               cert = PublicBlob(c).bytes().decode("ascii"),
-              scopes = set(scopes.split()),
-              auths = set(auth)
+              scopes = scopes.split(),
+              auths = auth
             )
     cert.add_service(name, srv, overwrite)
 

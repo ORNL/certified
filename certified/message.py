@@ -8,7 +8,7 @@ from typing_extensions import Annotated
 from urllib.parse import urlsplit, urlunsplit
 
 import logging
-_logging = logging.getLogger(__name__)
+_logger = logging.getLogger(__name__)
 
 import typer
 
@@ -49,10 +49,17 @@ Example: -H "X-Token: ABC" gets parsed as headers = {"X-Token": "ABC"}.
                     Optional[HTTPMethod],
                     typer.Option(help="HTTP method to use."),
                 ] = None,
+         v : bool = typer.Option(False, "-v", help="show info-level logs"),
+         vv : bool = typer.Option(False, "-vv", help="show debug-level logs"),
          config : Config = None):
     """
     Send a json-message to an mTLS-authenticated HTTPS-REST-API.
     """
+    if vv:
+        logging.basicConfig(level=logging.DEBUG)
+    elif v:
+        logging.basicConfig(level=logging.INFO)
+
     # Validate arguments
     if X is None:
         X = HTTPMethod.POST if data else HTTPMethod.GET
@@ -70,15 +77,16 @@ Example: -H "X-Token: ABC" gets parsed as headers = {"X-Token": "ABC"}.
     # Rewrite the URL so that the scheme and netloc appear in the base.
     (scheme, netloc, path, query, fragment) = urlsplit(url)
     base = urlunsplit((scheme, netloc,"","",""))
-    #url  = urlunsplit(("","",path,query,fragment))
+    url  = urlunsplit(("","",path,query,fragment))
 
     with cert.Client(base, headers=headers) as cli:
         if data:
+            assert X == HTTPMethod.POST
             ddata = json.loads(data)
-            req = Request(X.value, url, json=ddata)
+            resp = cli.post(url, json=ddata)
         else:
-            req = Request(X.value, url)
-        resp = cli.send(req)
+            assert X == HTTPMethod.GET
+            resp = cli.get(url)
     if resp.status_code != 200:
         return resp.status_code
 

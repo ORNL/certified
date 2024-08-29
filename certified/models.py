@@ -1,4 +1,4 @@
-from typing import Set
+from typing import List
 from pydantic import BaseModel, SecretStr
 
 class TrustedClient(BaseModel):
@@ -9,7 +9,7 @@ class TrustedClient(BaseModel):
     really use the scope data here.
     """
     cert   : str # client PEM-certificate
-    scopes : Set[str] = set() # scopes the server will allow this client to gain
+    scopes : List[str] = [] # scopes the server will allow this client to gain
 
 class TrustedService(BaseModel):
     """
@@ -23,8 +23,8 @@ class TrustedService(BaseModel):
     """
     url    : str # server location
     cert   : str # server PEM-encoded certificate (or CA)
-    scopes : Set[str] = set() # scopes client should request when using this service
-    auths : Set[str] = set() # names of validators recognized by this service
+    scopes : List[str] = [] # scopes client should request when using this service
+    auths : List[str] = [] # names of validators recognized by this service
 
 class LokiConfig(BaseModel):
     url    : str # loki server location
