@@ -31,7 +31,7 @@ __all__ = ["SAN", "name", "PrivIface", "hash_for_pubkey",
            "cert_builder_common", "get_aki",
            "CertificateIssuerPrivateKeyTypes",
            "CertificatePublicKeyTypes",
-           "append_pseudonym"
+           "append_pseudonym", "get_urls"
           ]
 
 class PrivIface:
@@ -297,6 +297,22 @@ def SAN(emails=[], hosts=[], uris=[]) -> x509.SubjectAlternativeName:
               + [_host(ip) for ip in hosts] 
               + [x509.UniformResourceIdentifier(u) for u in uris]
            )
+
+def get_urls(cert : x509.Certificate) -> List[str]:
+    try:
+        san = cert.extensions.get_extension_for_class(
+                x509.SubjectAlternativeName
+            )
+    except x509.ExtensionNotFound:
+        return []
+
+    urls = []
+    for n in san.value:
+        if isinstance(n, x509.DNSName):
+            urls.append(n.value)
+        elif isinstance(n, x509.IPAddress):
+            urls.append(str(n.value))
+    return urls
 
 def get_aki(cert : x509.Certificate) -> x509.AuthorityKeyIdentifier:
     """ Collect the SubjectKeyIdentifier from a certificate

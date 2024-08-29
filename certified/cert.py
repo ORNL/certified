@@ -1,9 +1,10 @@
 import os
+import asyncio
 from typing import Union, Optional, Tuple, List, Any, Dict, Set
 from urllib.parse import urlparse, urlunparse
 from urllib.parse import ParseResult as URL
 from contextlib import contextmanager
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from datetime import datetime, timedelta, timezone
 import ssl
 import shutil
@@ -20,6 +21,7 @@ from .ca import CA, LeafCert
 from .wrappers import ssl_context, configure_capath
 from .blob import Pstr, PWCallback, Blob, PublicBlob
 from .models import TrustedService
+from .loki import configure as configure_loki
 
 def fixed_ssl_context(
     certfile: str | os.PathLike[str],
@@ -78,17 +80,29 @@ def replace_baseurl(url : URL, new_base : str) -> URL:
         Leaves all other parts of url unchanged.
     """
     new = urlparse(new_base)
-    assert new.scheme   == url.scheme, "Cannot change protocol scheme."
-    assert new.port is None or new.netloc == f"{new.hostname}:{new.port}", "URL's netloc must define only a hostname and port."
+    assert new.scheme == "" or new.scheme == url.scheme, "Cannot change protocol scheme."
     assert new.params   == "", "URL must not contain params"
     assert new.query    == "", "URL must not contain query"
     assert new.fragment == "", "URL must not contain fragment"
 
-    new_path = Path(new.path) / url.path.lstrip("/")
+    # find host:port combination.
+    host = new.hostname
+    port = new.port
+    if port is None:
+        assert new.netloc == new.hostname, "URL's netloc must define only a hostname and optional port."
+        port = url.port # keep any url port, if defined
+    else:
+        assert new.netloc == f"{new.hostname}:{new.port}", "URL's netloc must define only a hostname and optional port."
+        assert url.port is None, "Cannot define port in both the server's url field and the server name."
 
+    # join the two paths with new at the left.
+    if new.path == "":
+        new_path = url.path
+    else:
+        new_path = str(PurePosixPath(new.path) / url.path.lstrip("/"))
     return URL(scheme   = url.scheme,
-               netloc   = new.netloc,
-               path     = str(new_path),
+               netloc = f"{host}:{port}" if port else host,
+               path     = new_path,
                params   = url.params,
                query    = url.query,
                fragment = url.fragment)
@@ -131,6 +145,7 @@ class Certified:
                     continue
                 if fname.stem in signers:
                     # ee-cert signed directly by a signer, just return it.
+                    _logger.debug("Found end-entity signature from %s", fname.name)
                     return fname.read_bytes(), b""
 
         if (self.config / "CA").is_dir():
@@ -140,6 +155,7 @@ class Certified:
                 if fname.stem in signers:
                     # CA was signed by signer. Return my id.crt and the CA chain.
                     crt = (self.config / "id.crt").read_bytes()
+                    _logger.debug("Found CA signature from %s", fname.name)
                     return crt, fname.read_bytes()
 
         raise KeyError(f"Unable to find any certificate signed from any authorizers in ({signers}).")
@@ -152,6 +168,7 @@ class Certified:
             assert is_client, "Must be client to use TrustedService cfg."
         ctx = ssl_context(is_client)
         if not srv or len(srv.auths) == 0:
+            _logger.debug("Client - authenticating using id.crt")
             self.identity().configure_cert(ctx)
         else: # lookup any signature trusted by the server
             crt, chain = self.get_chain_from(srv.auths)
@@ -165,6 +182,7 @@ class Certified:
                 configure_capath(ctx, self.config/"known_servers")
             else:
                 # Use the server's specific certificate.
+                _logger.debug("Requiring specific certificate for known service at %s", srv.url)
                 ctx.load_verify_locations(cadata=srv.cert)
         else:
             configure_capath(ctx, self.config/"known_clients")
@@ -173,30 +191,34 @@ class Certified:
     def add_client(self,
                    name:Pstr,
                    cert:x509.Certificate,
-                   replace:bool = False) -> None:
+                   scopes:Set[str] = set(),
+                   overwrite:bool = False) -> None:
         """ Add the certificate to `known_clients`
             with the given name.
         """
-        self._add_known(self.config / "known_clients" / f"{str(name)}.crt",
-                        cert, replace)
-
-    def add_server(self,
-                   name:Pstr,
-                   cert:x509.Certificate,
-                   replace:bool = False) -> None:
-        """ Add the certificate to `known_servers`
-            with the given name.
-        """
-        self._add_known(self.config / "known_servers" / f"{str(name)}.crt",
-                        cert, replace)
-
-    def _add_known(self,
-                   fname:Path,
-                   cert:x509.Certificate,
-                   replace:bool) -> None:
-        if not replace and fname.exists():
+        fname = self.config / "known_clients" / f"{str(name)}.crt"
+        if not overwrite and fname.exists():
             raise FileExistsError(fname)
         PublicBlob(cert).write(fname)
+
+    def add_server(self,
+                   name : Pstr,
+                   srv  : TrustedService,
+                   overwrite:bool = False) -> None:
+        """ Add the certificate to `known_servers`
+            with the given info.  See `TrustedService`
+            for documentation on the attributes.
+        """
+        parse = urlparse(srv.url)
+        assert parse.netloc != "", "Service URL must define a hostname!"
+        assert parse.params == "", "Service URL must not use params."
+        assert parse.query  == "", "Service URL must not use query."
+        assert parse.fragment == "", "Service URL must not use fragment."
+
+        fname = self.config / "known_servers" / f"{str(name)}.yaml"
+        if not overwrite and fname.exists():
+            raise FileExistsError(fname)
+        fname.write_text( yaml.dump( srv.model_dump() ) )
 
     def lookup_public_key(self, kid : int) -> bis.PublicKey:
         # FIXME: use key serial numbers
@@ -274,7 +296,9 @@ class Certified:
 
         srv = self.lookup_server(url.hostname)
         if srv:
+            old_url = url
             url = replace_baseurl(url, srv.url)
+            _logger.debug("Replaced %s with %s", old_url, url)
 
         new_base = urlunparse(url)
 
@@ -287,6 +311,7 @@ class Certified:
     def serve(self,
               app : Any,
               url_str : str,
+              loki : Optional[Pstr] = None,
               get_passwd : PWCallback = None) -> None:
         cfg = self.config
         url = urlparse(url_str)
@@ -302,7 +327,8 @@ class Certified:
 
             assert uvicorn is not None, "uvicorn is not available."
 
-            uvicorn.run(app,
+            config = uvicorn.Config(
+                        app,
                         host = url.hostname,
                         port = url.port,
                         log_level = "info",
@@ -312,5 +338,9 @@ class Certified:
                         ssl_keyfile   = cfg/"id.key", # type: ignore[arg-type]
                         ssl_keyfile_password = get_passwd, # type: ignore[arg-type]
                         http = "h11")
+            if loki: # setup logging
+                configure_loki(str(app), loki)
+            server = uvicorn.Server(config)
+            asyncio.run( server.serve() )
         else:
             raise ValueError(f"Unsupported URL scheme: {url.scheme}")

@@ -3,8 +3,9 @@
 import os
 import json
 from enum import Enum
-from typing import Optional, Dict
+from typing import Optional, Dict, List
 from typing_extensions import Annotated
+from urllib.parse import urlsplit, urlunsplit
 
 import logging
 _logging = logging.getLogger(__name__)
@@ -37,6 +38,13 @@ def message(url: Annotated[
 Example: '{"refs": [1,2], "query": "What's the weather?"}'
 """)
                 ] = None,
+         H: Annotated[
+                    List[str],
+                    typer.Option(help="headers to pass",
+                        rich_help_panel="""Interpreted as curl interprets them (split once on ": ").
+Example: -H "X-Token: ABC" gets parsed as headers = {"X-Token": "ABC"}.
+""")
+                ] = [],
          X: Annotated[
                     Optional[HTTPMethod],
                     typer.Option(help="HTTP method to use."),
@@ -53,8 +61,18 @@ Example: '{"refs": [1,2], "query": "What's the weather?"}'
     headers : Dict[str,str] = {}
     if data:
         headers["Content-Type"] = "application/json"
+    for hdr in H:
+        u = hdr.split(": ", 1)
+        if len(u) != 2:
+            raise ValueError(f"Invalid header: '{hdr}'")
+        headers[u[0]] = u[1]
 
-    with cert.Client(headers=headers) as cli:
+    # Rewrite the URL so that the scheme and netloc appear in the base.
+    (scheme, netloc, path, query, fragment) = urlsplit(url)
+    base = urlunsplit((scheme, netloc,"","",""))
+    #url  = urlunsplit(("","",path,query,fragment))
+
+    with cert.Client(base, headers=headers) as cli:
         if data:
             ddata = json.loads(data)
             req = Request(X.value, url, json=ddata)

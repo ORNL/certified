@@ -14,11 +14,10 @@ _logger = logging.getLogger(__name__)
 
 import typer
 
-from certified import Certified
 import certified.encode as encode
-from certified.blob import PublicBlob
-import certified.loki as setup_loki
-from .ca import CA
+from .blob import PublicBlob
+from .cert import Certified
+from .models import TrustedService
 
 from cryptography import x509
 
@@ -116,14 +115,6 @@ def introduce(crt : Annotated[
                         Path,
                         typer.Argument(help="Subject's certificate.")
                     ],
-              add_client : Annotated[
-                        str,
-                        typer.Option(help="Add the subject directly to known_clients as <name>.")
-                    ] = "",
-              add_server : Annotated[
-                        str,
-                        typer.Option(help="Add the subject directly to known_servers as <name>.")
-                    ] = "",
               config : Config = None):
     """
     Write an introduction for the subject named by the
@@ -142,16 +133,10 @@ def introduce(crt : Annotated[
 
 
     To use this introduction, the subject will need to place
-    your response in their config. as "id/<your_name>.crt"
-    or "CA/<your_name>.crt".
-
-    If --add-client is specified, also adds this certificate
-    to your list of known clients.  The subject will not
-    need to present your signature back to you for this to work.
-
-    If --add-server is specified, also adds this certificate
-    to your list of known servers.  The subject will not
-    need to present your signature back to you for this to work.
+    your response in their config. as `id/<your_name>.crt`
+    or `CA/<your_name>.crt` (depending on which certificate
+    was signed).  They will also need to list <your_name>
+    within one of their `known_server/<server_name>.yaml` files.
     """
 
     cert = Certified(config)
@@ -165,11 +150,72 @@ def introduce(crt : Annotated[
     signed = cert.signer().sign_csr( csr )
     print( PublicBlob(signed).bytes().decode("utf-8").rstrip() )
 
-    # TODO: implement add_client and add_server
-    if add_client != "":
-        cert.add_client(add_client, signed)
-    if add_server != "":
-        cert.add_server(add_server, signed)
+@app.command()
+def add_client(name : Annotated[
+                        str,
+                        typer.Argument(help="Client's name.")
+                    ],
+               crt : Annotated[
+                        Path,
+                        typer.Argument(help="Client's certificate.")
+                    ],
+               scopes : Annotated[
+                        str,
+                        typer.Argument(help="Whitespace-separated list of allowed scopes.")
+                    ] = "",
+               overwrite: Annotated[bool, typer.Option(
+                        help="Overwrite existing client.")
+                    ] = False,
+               config : Config = None):
+    """
+    Add the client directly to your `known_clients` list.
+    """
+
+    cert = Certified(config)
+
+    pem_data = crt.read_bytes()
+    c = x509.load_pem_x509_certificate(pem_data)
+    cert.add_client(name, c, set(scopes.split()), overwrite)
+
+@app.command()
+def add_service(name : Annotated[
+                        str,
+                        typer.Argument(help="Client's name.")
+                    ],
+               crt : Annotated[
+                        Path,
+                        typer.Argument(help="Client's certificate.")
+                    ],
+               scopes : Annotated[
+                        str,
+                        typer.Argument(help="Whitespace-separated list of requested scopes for this server.")
+                    ] = "",
+               auth : Annotated[
+                        List[str],
+                        typer.Option(help="An authorizor whose signature would be recognized for authenticating to this server.")
+                    ] = [],
+               overwrite: Annotated[bool, typer.Option(
+                        help="Overwrite existing server.")
+                    ] = False,
+               config : Config = None):
+    """
+    Add the service directly to your `known_servers` list.
+    """
+
+    cert = Certified(config)
+
+    pem_data = crt.read_bytes()
+    c = x509.load_pem_x509_certificate(pem_data)
+
+    urls = encode.get_urls(c)
+    assert len(urls) > 0, "Error! Server certificate defines no hostname-s."
+    srv = TrustedService(
+              url = f"https://{urls[0]}",
+              cert = PublicBlob(c).bytes().decode("ascii"),
+              scopes = set(scopes.split()),
+              auths = set(auth)
+            )
+    cert.add_service(name, srv, overwrite)
 
 """
 @app.command()
@@ -210,7 +256,7 @@ def serve(app : Annotated[
                        rich_help_panel="Example: https://127.0.0.1:8000")
                 ] = "https://0.0.0.0:4433",
           loki : Annotated[
-                  Optional[Path],
+                  Optional[str],
                   typer.Option(help="json file containing url,user,passwd for sending logs to loki")
                 ] = None,
           v : bool = typer.Option(False, "-v", help="show info-level logs"),
@@ -225,10 +271,9 @@ def serve(app : Annotated[
         logging.basicConfig(level=logging.INFO)
 
     cert = Certified(config)
-    if loki: # setup logging
-        setup_loki.configure(str(app), loki)
     _logger.info("Running %s %s", __name__, app)
-    cert.serve(app, url)
+    #asyncio.run( cert.serve(app, url, loki) )
+    cert.serve(app, url, loki)
     _logger.info("Exited %s", app)
 
 # TODO: list out identities (and key types) of all known clients or servers
