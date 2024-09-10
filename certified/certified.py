@@ -5,7 +5,7 @@ import importlib
 import asyncio
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Optional, List
+from typing import Optional, List, Union
 from typing_extensions import Annotated
 from urllib.parse import urlsplit, urlunsplit
 
@@ -141,7 +141,7 @@ def introduce(crt : Annotated[
     cert = Certified(config)
 
     pem_data = crt.read_bytes()
-    csr : x509.Certificate | x509.CertificateSigningRequest
+    csr : Union[x509.Certificate, x509.CertificateSigningRequest]
     try:
         csr = x509.load_pem_x509_csr(pem_data)
     except ValueError:

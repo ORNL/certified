@@ -24,13 +24,13 @@ from .models import TrustedService
 from .loki import configure as configure_loki
 
 def fixed_ssl_context(
-    certfile: str | os.PathLike[str],
-    keyfile: str | os.PathLike[str] | None,
+    certfile: Pstr,
+    keyfile: Optional[Pstr],
     password,
     ssl_version: int,
     cert_reqs: int,
-    ca_certs: str | os.PathLike[str] | None,
-    ciphers: str | None,
+    ca_certs: Optional[Pstr],
+    ciphers: Optional[str],
 ) -> ssl.SSLContext:
     ctx = ssl_context(is_client = False)
     #ctx.verify_mode = ssl.VerifyMode(cert_reqs) # already required by (our) default

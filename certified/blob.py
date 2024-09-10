@@ -164,8 +164,8 @@ class Blob:
                 os.unlink(f.name)
 
 class PublicBlob(Blob):
-    def __init__(self, cert : x509.Certificate
-                            | x509.CertificateSigningRequest) -> None:
+    def __init__(self, cert : Union[x509.Certificate,
+                                    x509.CertificateSigningRequest]) -> None:
         super().__init__(cert.public_bytes(Encoding.PEM), False)
 
 class PrivateBlob(Blob):

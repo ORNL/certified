@@ -29,7 +29,7 @@
 # WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 
-from typing import Optional, List, Callable
+from typing import Optional, List, Callable, Union
 import datetime
 import ssl
 
@@ -111,7 +111,7 @@ class CA(FullCert):
             self._path_length = None
 
     def sign_csr(self,
-                 csr : x509.CertificateSigningRequest | x509.Certificate,
+                 csr : Union[x509.CertificateSigningRequest, x509.Certificate],
                  is_ca : bool = False) -> x509.Certificate:
         """ Sign the given CSR (or re-sign the certificate).
 
