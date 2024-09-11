@@ -47,6 +47,7 @@ from cryptography.hazmat.primitives.asymmetric import (
 from .blob import PublicBlob, PrivateBlob, Blob, Pstr, PWCallback
 import certified.encode as encode
 from .encode import CertificateIssuerPrivateKeyTypes
+from .serial import cert_to_pem
 
 class FullCert:
     """ A full certificate contains both a certificate and private key.

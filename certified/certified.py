@@ -3,6 +3,7 @@
 import os, sys, shutil
 import importlib
 import asyncio
+import json
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional, List, Union
@@ -18,6 +19,7 @@ import certified.encode as encode
 from .blob import PublicBlob
 from .cert import Certified
 from .models import TrustedService
+from .serial import cert_to_b64, b64_to_cert
 
 from cryptography import x509
 
@@ -130,7 +132,6 @@ def introduce(crt : Annotated[
     longer trustworthy, and you'll need to create a new
     identity!
 
-
     To use this introduction, the subject will need to place
     your response in their config. as `id/<your_name>.crt`
     or `CA/<your_name>.crt` (depending on which certificate
@@ -179,11 +180,11 @@ def add_client(name : Annotated[
 @app.command()
 def add_service(name : Annotated[
                         str,
-                        typer.Argument(help="Client's name.")
+                        typer.Argument(help="Service's hostname[:port][/path-prefix].")
                     ],
                crt : Annotated[
                         Path,
-                        typer.Argument(help="Client's certificate.")
+                        typer.Argument(help="Service's public signing certificate (PEM or b64-DER).")
                     ],
                scopes : Annotated[
                         str,
@@ -204,20 +205,41 @@ def add_service(name : Annotated[
     cert = Certified(config)
 
     pem_data = crt.read_bytes()
-    c = x509.load_pem_x509_certificate(pem_data)
+    try:
+        c = x509.load_pem_x509_certificate(pem_data)
+    except ValueError:
+        c = b64_to_cert(pem_data.decode('ascii').strip())
+    # TODO: validate c is a signing cert (otherwise TLS balks)
 
-    if name not in auth: # services generally trust thes'selvs
-        auth.append(name) 
+    xname = c.subject.rfc4514_string()
+    if xname not in auth: # services generally trust thes'selvs
+        auth.append(xname) 
+    # TODO: validate name is host[:port] (i.e. that https://{name} works)
 
-    urls = encode.get_urls(c)
-    assert len(urls) > 0, "Error! Server certificate defines no hostname-s."
     srv = TrustedService(
-              url = f"https://{urls[0]}",
-              cert = PublicBlob(c).bytes().decode("ascii"),
+              url = f"https://{name}",
+              cert = cert_to_b64(c),
               scopes = scopes.split(),
               auths = auth
             )
     cert.add_service(name, srv, overwrite)
+
+@app.command()
+def add_identity(signature : Annotated[
+                        Path,
+                        typer.Argument(help='json signature response containing both "signed_cert" and "ca_cert".')
+                    ],
+               overwrite: Annotated[bool, typer.Option(
+                        help="Overwrite existing authorization?")
+                    ] = False,
+               config : Config = None):
+    with open(signature) as f:
+        data = json.load(f)
+    signed_cert = x509.load_pem_x509_certificate(data["signed_cert"])
+    ca_cert = x509.load_pem_x509_certificate(data["ca_cert"])
+
+    cert = Certified(config)
+    cert.add_identity(signed_cert, ca_cert, overwrite)
 
 """
 @app.command()

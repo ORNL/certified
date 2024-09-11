@@ -48,6 +48,7 @@ from .cert_base import FullCert
 from .blob import PublicBlob, PrivateBlob, Blob, PWCallback
 import certified.encode as encode
 from .encode import cert_builder_common
+from .serial import cert_to_pem
 
 CA_Usage = x509.KeyUsage(
     digital_signature=True,  # OCSP
@@ -397,7 +398,7 @@ class CA(FullCert):
           ctx: The SSL context to be modified.
 
         """
-        ctx.load_verify_locations(cadata=self.cert_pem.bytes().decode("ascii"))
+        ctx.load_verify_locations(cadata=cert_to_pem(self.certificate))
 
 
 class LeafCert(FullCert):

@@ -8,7 +8,7 @@ class TrustedClient(BaseModel):
     TLS certificates don't carry scopes, so we can't
     really use the scope data here.
     """
-    cert   : str # client PEM-certificate
+    cert   : str # client b64-der certificate
     scopes : List[str] = [] # scopes the server will allow this client to gain
 
 class TrustedService(BaseModel):
@@ -22,7 +22,7 @@ class TrustedService(BaseModel):
     server's configuration.
     """
     url    : str # server location
-    cert   : str # server PEM-encoded certificate (or CA)
+    cert   : str # server b64-der certificate (or CA)
     scopes : List[str] = [] # scopes client should request when using this service
     auths : List[str] = [] # names of validators recognized by this service
 

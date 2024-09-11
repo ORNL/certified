@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "certified"
-version = "0.7.2"
+version = "0.7.3"
 description = "The missing certificate infrastructure for web APIs."
 authors = [
             "David M. Rogers <predictivestatmech@gmail.com>",

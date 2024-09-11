@@ -15,6 +15,7 @@ from certified.message import app as msg
 from certified.layout import check_config
 from certified.blob import Blob
 from certified.models import TrustedService
+from certified.serial import cert_to_b64, pem_to_cert
 
 runner = CliRunner()
 
@@ -129,13 +130,13 @@ def test_intro_id(tmp_path : Path) -> None:
     # add the server's certificate to the client
     srv_ca = (srv/"CA.crt").read_text() # TODO: also test "id.crt" -- which throws self-signed cert. error :_(
     service = TrustedService(url = "127.0.0.1",
-                             cert = srv_ca,
+                             cert = cert_to_b64(pem_to_cert(srv_ca)),
                              auths = ["test_auth"])
     with pytest.raises(AssertionError):
         # bad url (parses as path for some reason)
         Certified(cli).add_service("test", service)
     service = TrustedService(url = "https://127.0.0.1",
-                             cert = srv_ca,
+                             cert = cert_to_b64(pem_to_cert(srv_ca)),
                              auths = ["test_auth"])
     Certified(cli).add_service("test", service)
 
@@ -171,12 +172,12 @@ def test_manual_add(tmp_path : Path) -> None:
     assert not can_connect(cli, srv, "127.0.0.1", 8323), \
             "Client should not recognize server."
 
-    result = runner.invoke(app, ["add-service", "test", str(cli/"id.crt"),
-                                 "--config", str(srv)
-                                ])
-    assert result.exit_code == 1
-    # no hostname defined
-    assert isinstance(result.exception, AssertionError)
+    #result = runner.invoke(app, ["add-service", "test", str(cli/"id.crt"),
+    #                             "--config", str(srv)
+    #                            ])
+    #assert result.exit_code == 1
+    ## not a signing certificate [sic]
+    #assert isinstance(result.exception, AssertionError)
 
     # FIXME: this creates a custom service, which doesn't jive...
     """

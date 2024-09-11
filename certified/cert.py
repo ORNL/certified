@@ -19,8 +19,9 @@ import certified.layout as layout
 from .encode import append_pseudonym
 from .ca import CA, LeafCert
 from .wrappers import ssl_context, configure_capath
-from .blob import Pstr, PWCallback, Blob, PublicBlob
+from .blob import Pstr, PWCallback, Blob
 from .models import TrustedService
+from .serial import pem_to_cert, cert_to_pem, b64_to_cert, cert_to_b64
 from .loki import configure as configure_loki
 
 def fixed_ssl_context(
@@ -185,7 +186,8 @@ class Certified:
             else:
                 # Use the server's specific certificate.
                 _logger.debug("Requiring specific certificate for known service at %s", srv.url)
-                ctx.load_verify_locations(cadata=srv.cert)
+                pem = cert_to_pem( b64_to_cert(srv.cert) )
+                ctx.load_verify_locations(cadata=pem)
         else:
             configure_capath(ctx, self.config/"known_clients")
         return ctx
@@ -201,7 +203,7 @@ class Certified:
         fname = self.config / "known_clients" / f"{str(name)}.crt"
         if not overwrite and fname.exists():
             raise FileExistsError(fname)
-        PublicBlob(cert).write(fname)
+        fname.write_text(cert_to_pem(cert))
 
     def add_service(self,
                     name : Pstr,
@@ -221,6 +223,23 @@ class Certified:
         if not overwrite and fname.exists():
             raise FileExistsError(fname)
         fname.write_text( yaml.dump( srv.model_dump() ) )
+
+    def add_identity(self,
+                     signed_cert: x509.Certificate,
+                     ca_cert: x509.Certificate,
+                     overwrite: bool = False) -> None:
+        """ Add the signed certificate to the `id/` subdirectory.
+        """
+        # TODO: check that signed_cert is an ee-cert
+        # TODO: check that ca_cert is a CA-cert
+        # TODO: check that the validation chain is legit
+        xname = ca_cert.subject.rfc4514_string()
+
+        (self.config / "id").mkdir(exist_ok=True, parents=True)
+        fname = self.config / "id" / f"{xname}.crt"
+        if not overwrite and fname.exists():
+            raise FileExistsError(fname)
+        fname.write_text(cert_to_pem(signed_cert))
 
     def lookup_public_key(self, kid : int) -> bis.PublicKey:
         # FIXME: use key serial numbers
