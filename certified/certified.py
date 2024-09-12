@@ -18,6 +18,7 @@ import typer
 import certified.encode as encode
 from .blob import PublicBlob
 from .cert import Certified
+from .cert_info import CertInfo
 from .models import TrustedService
 from .serial import cert_to_b64, b64_to_cert
 
@@ -79,13 +80,24 @@ Example: 'Certificate Lab, Inc.'"
 Example: 'Computing Directorate'
 """)
                 ] = None,
+         uid: Annotated[
+                    Optional[str],
+                    typer.Option(help="System user name")
+             ] = None,
+         domain: Annotated[
+                    str,
+                    typer.Option(help="Domain components (.-separated)")
+             ] = "",
+         country: Optional[str] = None,
+         state: Optional[str] = None,
+         city: Optional[str] = None,
          email: Email = [],
          host: Hostname = [],
          uri: URI = [],
          overwrite: Annotated[bool, typer.Option(
                         help="Overwrite existing config.")
                     ] = False,
-         config : Config = None):
+         config : Config = None) -> int:
     """
     Create a new signing and end-entity ID.
     """
@@ -95,20 +107,25 @@ Example: 'Computing Directorate'
         assert unit, "If org is defined, unit must also be defined."
         assert org, "If unit is defined, org must also be defined."
         assert name is None, "If org is defined, name must not be defined."
-        xname = encode.org_name(org, unit)
+        assert uid is None, "If org is defined, uid must not be defined."
+        xname = encode.org_name(org, unit,
+                                domain=domain.split('.'),
+                                location=(country,state,city))
     elif name:
         assert org is None, "If name is defined, org must not be defined."
         assert unit is None, "If name is defined, unit must not be defined."
-        xname = encode.person_name(name)
+        xname = encode.person_name(name, uname=uid,
+                                   domain=domain.split('.'),
+                                   location=(country,state,city))
     else:
-        raise AssertionError("No identities provided.")
+        raise AssertionError("Name or org must be provided.")
     if sum(map(len, [email, host, uri])) > 0:
         san  = encode.SAN(email, host, uri)
     else:
         raise ValueError("Host, Email, or URI must also be provided.")
 
     cert = Certified.new(xname, san, config, overwrite)
-    print(f"Generated new config for {xname.rfc4514_string()} at {cert.config}.")
+    print(f"Generated new config for {encode.rfc4514name(xname)} at {cert.config}.")
     return 0
 
 @app.command()
@@ -116,7 +133,7 @@ def introduce(crt : Annotated[
                         Path,
                         typer.Argument(help="Subject's certificate.")
                     ],
-              config : Config = None):
+              config : Config = None) -> int:
     """
     Write an introduction for the subject named by the
     certificate above.  Do not use this function unless
@@ -147,8 +164,10 @@ def introduce(crt : Annotated[
         csr = x509.load_pem_x509_csr(pem_data)
     except ValueError:
         csr = x509.load_pem_x509_certificate(pem_data)
-    signed = cert.signer().sign_csr( csr )
+    info = CertInfo.load(csr)
+    signed = cert.signer().issue_cert(info)
     print( PublicBlob(signed).bytes().decode("utf-8").rstrip() )
+    return 0
 
 @app.command()
 def add_client(name : Annotated[
@@ -177,6 +196,8 @@ def add_client(name : Annotated[
     c = x509.load_pem_x509_certificate(pem_data)
     cert.add_client(name, c, scopes.split(), overwrite)
 
+    return 0
+
 @app.command()
 def add_service(name : Annotated[
                         str,
@@ -197,7 +218,7 @@ def add_service(name : Annotated[
                overwrite: Annotated[bool, typer.Option(
                         help="Overwrite existing server.")
                     ] = False,
-               config : Config = None):
+               config : Config = None) -> int:
     """
     Add the service directly to your `known_servers` list.
     """
@@ -211,7 +232,7 @@ def add_service(name : Annotated[
         c = b64_to_cert(pem_data.decode('ascii').strip())
     # TODO: validate c is a signing cert (otherwise TLS balks)
 
-    xname = c.subject.rfc4514_string()
+    xname = encode.rfc4514name(c.subject)
     if xname not in auth: # services generally trust thes'selvs
         auth.append(xname) 
     # TODO: validate name is host[:port] (i.e. that https://{name} works)
@@ -223,6 +244,7 @@ def add_service(name : Annotated[
               auths = auth
             )
     cert.add_service(name, srv, overwrite)
+    return 0
 
 @app.command()
 def add_identity(signature : Annotated[
@@ -232,7 +254,7 @@ def add_identity(signature : Annotated[
                overwrite: Annotated[bool, typer.Option(
                         help="Overwrite existing authorization?")
                     ] = False,
-               config : Config = None):
+               config : Config = None) -> int:
     with open(signature) as f:
         data = json.load(f)
     signed_cert = x509.load_pem_x509_certificate(data["signed_cert"])
@@ -240,6 +262,7 @@ def add_identity(signature : Annotated[
 
     cert = Certified(config)
     cert.add_identity(signed_cert, ca_cert, overwrite)
+    return 0
 
 """
 @app.command()
@@ -285,7 +308,7 @@ def serve(app : Annotated[
                 ] = None,
           v : bool = typer.Option(False, "-v", help="show info-level logs"),
           vv : bool = typer.Option(False, "-vv", help="show debug-level logs"),
-          config : Config = None):
+          config : Config = None) -> int:
     """
     Run the web server with HTTPS certificate-based trust setup.
     """
@@ -299,6 +322,7 @@ def serve(app : Annotated[
     #asyncio.run( cert.serve(app, url, loki) )
     cert.serve(app, url, loki)
     _logger.info("Exited %s", app)
+    return 0
 
 # TODO: list out identities (and key types) of all known clients or servers
 # TODO: print logs of all successful and unsuccessful authentications

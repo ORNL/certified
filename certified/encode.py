@@ -1,7 +1,7 @@
 """ Functionality for encoding parts of x509 certificates.
 """
 
-from typing import Optional, List, Tuple, Any
+from typing import Optional, List, Tuple, Any, Union
 from enum import Enum
 import datetime
 import ipaddress
@@ -31,7 +31,8 @@ __all__ = ["SAN", "name", "PrivIface", "hash_for_pubkey",
            "cert_builder_common", "get_aki",
            "CertificateIssuerPrivateKeyTypes",
            "CertificatePublicKeyTypes",
-           "append_pseudonym", "get_urls"
+           "append_pseudonym", "get_urls", "rfc4514name",
+           "get_path_length", "get_is_ca"
           ]
 
 class PrivIface:
@@ -78,23 +79,21 @@ def hash_for_pubkey(pkey : CertificatePublicKeyTypes
         return None
     return hashes.SHA256()
 
+Location = Tuple[Optional[str],Optional[str],Optional[str]]
 
 def person_name(
     name : str,
     uname : Optional[str] = None,
     domain : List[str] = [],
     #email : Optional[str] = None, # deprecated.
-    location: Optional[Tuple[str,str,str]] = None,
+    location: Location = (None, None, None),
     pseudonym: Optional[str] = None,
 ) -> x509.Name:
     """ Build and return an x509.Name suitable for an individual.
     """
     #   (NameOID.EMAIL_ADDRESS, email)
 
-    if location:
-        country, state, city = location
-    else:
-        country, state, city = None, None, None
+    country, state, city = location
 
     name_pieces = []
     for oid, val in [
@@ -116,7 +115,8 @@ def org_name(
     organization_name: str,
     unit_name: str,
     common_name: Optional[str] = None,
-    location: Optional[Tuple[str,str,str]] = None,
+    domain: List[str] = [],
+    location: Location = (None,None,None),
     pseudonym: Optional[str] = None,
 ) -> x509.Name:
     """ Build and return an x509.Name suitable for an organization.
@@ -141,10 +141,7 @@ def org_name(
        pseudonym: Used here to denote whether this is a signing key.
     """
 
-    if location:
-        country, state, city = location
-    else:
-        country, state, city = None, None, None
+    country, state, city = location
 
     name_pieces = []
     for oid, val in [
@@ -155,6 +152,8 @@ def org_name(
                 (NameOID.COUNTRY_NAME, country),
                 (NameOID.STATE_OR_PROVINCE_NAME, state),
                 (NameOID.LOCALITY_NAME, city)
+            ] + [
+                (NameOID.DOMAIN_COMPONENT, dn) for dn in domain
             ]:
         if val:
             name_pieces.append(x509.NameAttribute(oid, val))
@@ -333,3 +332,26 @@ def get_aki(cert : x509.Certificate) -> x509.AuthorityKeyIdentifier:
         )
     return x509.AuthorityKeyIdentifier \
                .from_issuer_subject_key_identifier(ski_ext.value)
+
+def rfc4514name(subject: x509.Name):
+    return subject.rfc4514_string({
+                NameOID.EMAIL_ADDRESS: "E"
+           })
+
+def get_path_length(cert: x509.Certificate) -> Optional[int]:
+    try:
+        basic = cert.extensions \
+                    .get_extension_for_class(x509.BasicConstraints)
+        return basic.value.path_length
+    except x509.ExtensionNotFound:
+        raise ValueError("BasicConstraints not found.")
+
+def get_is_ca(cert: Union[x509.CertificateSigningRequest,
+                          x509.Certificate]) -> bool:
+    try:
+        basic = cert.extensions \
+                    .get_extension_for_class(x509.BasicConstraints)
+        return basic.value.ca
+    except x509.ExtensionNotFound:
+        return False
+        raise ValueError("BasicConstraints not found.")

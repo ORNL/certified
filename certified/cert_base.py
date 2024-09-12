@@ -54,7 +54,6 @@ class FullCert:
     """
     _certificate: x509.Certificate
     _private_key: CertificateIssuerPrivateKeyTypes
-    _path_length: Optional[int]
 
     def __init__(self, cert_bytes: bytes, private_key_bytes: bytes,
                  get_pw: PWCallback = None) -> None:
@@ -75,7 +74,6 @@ class FullCert:
         )
         assert isinstance(pkey, (ed25519.Ed25519PrivateKey, ed448.Ed448PrivateKey, rsa.RSAPrivateKey, ec.EllipticCurvePrivateKey)), f"Unusable key type: {type(pkey)}"
         self._private_key = pkey
-        self._path_length = None
 
     @classmethod
     def load(cls, base : Pstr, get_pw = None):

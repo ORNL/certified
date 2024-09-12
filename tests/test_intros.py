@@ -113,7 +113,10 @@ def test_intro_id(tmp_path : Path) -> None:
                                  "--config", str(srv)
                                  ])
     assert result.exit_code == 1
-    assert isinstance(result.exception, AssertionError)
+    # signing a CA throws a ValueError (bad path length)
+    assert isinstance(result.exception, ValueError)
+    # self-signature throws an AssertionError
+    #assert isinstance(result.exception, AssertionError)
 
     # TODO: also test introduce cli/"CA.crt"
     # introduce the client -- providing them a signed
@@ -161,7 +164,12 @@ def test_intro_id(tmp_path : Path) -> None:
 def test_manual_add(tmp_path : Path) -> None:
     cli, srv = create_pair(tmp_path)
 
-    # A fatally stupid self-signed bug.
+    # A fatally stupid self-signed bug in x509 protocols
+    # prevents us from adding client ee-certs, so we
+    # apparently have to trust clients to sign certificates?
+    #
+    # We need to write our own validator to get around this,
+    # or else clients can't be added directly.
     result = runner.invoke(app, ["add-client", "david", str(cli/"CA.crt"),
                                  "--config", str(srv)
                                  ])

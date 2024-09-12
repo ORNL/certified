@@ -16,7 +16,7 @@ from cryptography import x509
 import biscuit_auth as bis
 
 import certified.layout as layout
-from .encode import append_pseudonym
+from .encode import append_pseudonym, rfc4514name, get_is_ca
 from .ca import CA, LeafCert
 from .wrappers import ssl_context, configure_capath
 from .blob import Pstr, PWCallback, Blob
@@ -229,11 +229,28 @@ class Certified:
                      ca_cert: x509.Certificate,
                      overwrite: bool = False) -> None:
         """ Add the signed certificate to the `id/` subdirectory.
+        Params:
+            signed_cert: identity to add (to send to servers who recognize it)
+            ca_cert: certificate that signed this identity
+                     (will be used to name the signed identity)
+
+        Returns: None
+
+        Raises:
+            ValueError: If the issuer name on the certificate does not match
+                        the subject name of the issuer or the signature
+                        algorithm is unsupported.
+            TypeError: If the issuer does not have a supported public key
+                       type.
+            cryptography.exceptions.InvalidSignature: If the signature fails
+                       to verify.
         """
-        # TODO: check that signed_cert is an ee-cert
-        # TODO: check that ca_cert is a CA-cert
-        # TODO: check that the validation chain is legit
-        xname = ca_cert.subject.rfc4514_string()
+        assert not get_is_ca(signed_cert), "Cannot use this ca certificate as a client identity."
+
+        # check that the ca_cert actually issued this certificate
+        signed_cert.verify_directly_issued_by(ca_cert)
+
+        xname = rfc4514name(ca_cert.subject)
 
         (self.config / "id").mkdir(exist_ok=True, parents=True)
         fname = self.config / "id" / f"{xname}.crt"
@@ -275,7 +292,7 @@ class Certified:
           overwrite: if True, any existing files will be deleted first
         """
         ca    = CA.new(append_pseudonym(name, "Signing Certificate"))
-        ident = ca.issue_cert(name, san)
+        ident = ca.leaf_cert(name, san)
 
         cfg = layout.config(certified_config, False)
         if overwrite: # remove existing config!

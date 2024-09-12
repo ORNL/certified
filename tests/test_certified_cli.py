@@ -15,12 +15,12 @@ def test_init(tmp_path):
     result = runner.invoke(app, ["init", "--config", str(tmp_path)])
     assert result.exit_code == 1
     assert isinstance(result.exception, AssertionError)
-    assert "No identities" in str(result.exception)
+    assert "Name or org must be provided" in str(result.exception)
 
     result = runner.invoke(app, ["init", "--config", str(tmp_path),
                                  "--email", "me@home.org"])
     assert isinstance(result.exception, AssertionError)
-    assert "No identities" in str(result.exception)
+    assert "Name or org must be provided" in str(result.exception)
 
     result = runner.invoke(app, ["init", "--config", str(tmp_path),
                                  "Osamu Takada"])

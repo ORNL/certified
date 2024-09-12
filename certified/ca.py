@@ -1,4 +1,4 @@
-""" A class for holding x509 signing certificates (CA)
+""" A module for holding x509 signing certificates (CA)
     and leaf certificates (LeafCert)
 """
 # Code in this file was originally derived from
@@ -28,19 +28,14 @@
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 # WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-
 from typing import Optional, List, Callable, Union
 import datetime
 import ssl
 
 from cryptography import x509
-from cryptography.x509.oid import ExtendedKeyUsageOID
 from cryptography.hazmat.primitives.asymmetric import (
-    ed448,
     ed25519,
-    ec
 )
-
 import biscuit_auth as bis
 
 from .cert_base import FullCert
@@ -49,36 +44,7 @@ from .blob import PublicBlob, PrivateBlob, Blob, PWCallback
 import certified.encode as encode
 from .encode import cert_builder_common
 from .serial import cert_to_pem
-
-CA_Usage = x509.KeyUsage(
-    digital_signature=True,  # OCSP
-    content_commitment=False,
-    key_encipherment=False,
-    data_encipherment=False,
-    key_agreement=False,
-    key_cert_sign=True,  # sign certs
-    crl_sign=True,  # sign revocation lists
-    encipher_only=False,
-    decipher_only=False,
-)
-EE_Usage = x509.KeyUsage(
-    digital_signature=True,
-    content_commitment=False,
-    key_encipherment=True,
-    data_encipherment=False,
-    key_agreement=False,
-    key_cert_sign=False,
-    crl_sign=False,
-    encipher_only=False,
-    decipher_only=False,
-)
-
-EE_Extension = x509.ExtendedKeyUsage( [
-    ExtendedKeyUsageOID.CLIENT_AUTH,
-    ExtendedKeyUsageOID.SERVER_AUTH,
-    ExtendedKeyUsageOID.CODE_SIGNING,
-] )
-
+from .cert_info import CertInfo
 
 class CA(FullCert):
     """ CA-s are used only to sign other certificates.
@@ -102,104 +68,51 @@ class CA(FullCert):
           get_pw: called to get the password to decrypt the key (if a password was set)
         """
         super().__init__(cert_bytes, private_key_bytes, get_pw)
-        try:
-            basic = self._certificate.extensions \
-                        .get_extension_for_class(x509.BasicConstraints)
-            assert basic.value.ca, "Loaded certificate is not a CA."
-            self._path_length = basic.value.path_length
-        except x509.ExtensionNotFound:
-            raise ValueError("BasicConstraints not found.")
-            self._path_length = None
+        assert encode.get_is_ca(self._certificate), \
+                "Loaded certificate is not a CA."
 
-    def sign_csr(self,
-                 csr : Union[x509.CertificateSigningRequest, x509.Certificate],
-                 is_ca : bool = False) -> x509.Certificate:
-        """ Sign the given CSR (or re-sign the certificate).
-
-        TODO: combine all 3 signing functions to use this one.
+    def issue_cert(self, info : CertInfo,
+                   not_before: Optional[datetime.datetime] = None,
+                   not_after: Optional[datetime.datetime] = None,
+                   path_length : Optional[int] = None
+                  ) -> x509.Certificate:
+        """Issue the certificate described by `info`.
 
         Danger: Do not use this function unless you understand
                 how the resulting certificate will be used.
 
         Args:
-          csr: the certificate signing request
-          is_ca: is the result a signing key?
-                 If False, the result will be setup as an end-entity.
+          info: the certificate `CertInfo` object
+
+          not_before: Set the validity start date (notBefore) of the certificate.
+            This argument type is `datetime.datetime`.
+            Defaults to now.
+
+          not_after: Set the expiry date (notAfter) of the certificate. This
+            argument type is `datetime.datetime`.
+            Defaults to 365 days after `not_before`.
+
+          path_length: desired path length (None for end-entity)
+
+        Returns:
+          cert: The newly-generated certificate.
         """
-        if isinstance(csr, x509.CertificateSigningRequest):
-            assert csr.is_signature_valid, "CSR has invalid signature!"
 
-        # Validate and rebuild name
-        name_parts = []
-        for n in csr.subject:
-            # TODO: validate name here.
-            name_parts.append(n)
-        name = x509.Name( name_parts )
+        cert_builder = info.build(
+                            self._certificate,
+                            not_before = not_before,
+                            not_after = not_after,
+                            path_length = path_length
+                        )
+        return self._sign_cert( cert_builder )
 
-        # Validate and rebuild san
-        san_parts = []
-        try:
-            san = csr.extensions.get_extension_for_class(
-                x509.SubjectAlternativeName
-            )
-            for p in san.value:
-                # TODO: validate SAN parts here
-                san_parts.append(p)
-        except x509.ExtensionNotFound:
-            assert is_ca, "non-CA must include a SubjectAltName"
+    def _sign_cert(self, builder) -> x509.Certificate:
+        """Sign a certificate.
 
-        if not is_ca or len(name_parts) == 0:
-            assert len(san_parts) > 0, "SubjectAltName must be non-empty."
+        Danger: Do not use this function unless you understand
+                how the resulting certificate will be used.
 
-        # Validate key type.
-        pubkey = csr.public_key()
-        if not isinstance(pubkey, (ec.EllipticCurvePublicKey,
-                                    ed25519.Ed25519PublicKey,
-                                    ed448.Ed448PublicKey)):
-            raise ValueError(f"Unsupported key type: {type(pubkey)}")
-
-        path_length : Optional[int] = None
-        if is_ca:
-            assert self._path_length is not None
-            path_length = self._path_length - 1
-            if path_length < 0:
-                raise ValueError("Unable to sign for a CA.")
-
-        issuer = self._certificate.subject
-        cert_builder = cert_builder_common(
-            name, issuer, pubkey,
-            self_signed = False
-        ).add_extension(
-            x509.BasicConstraints(ca=True, path_length=path_length),
-            critical=True,
-        ).add_extension(
-            CA_Usage if is_ca else EE_Usage,
-            critical=True
-        ).add_extension(
-            encode.get_aki(self._certificate),
-            critical=False
-        )
-
-        if not is_ca:
-            cert_builder = cert_builder.add_extension(
-                                EE_Extension,
-                                critical = False)
-
-        if len(san_parts) > 0:
-            # Mark SAN critical iff Name is empty
-            cert_builder = cert_builder.add_extension(
-                    x509.SubjectAlternativeName(san_parts),
-                    critical = len(name_parts) == 0 )
-
-        return self.sign_cert( cert_builder )
-
-    def sign_cert(self, builder) -> x509.Certificate:
-        """ Sign a certificate.
-
-            Danger: Do not use this function unless you understand
-                    how the resulting certificate will be used.
-
-            Note: Consider using `sign_csr` instead of this function.
+        Note: Consider using `sign_csr` instead of this function.
 
         Args:
           builder: the certificate builder before signature
@@ -261,65 +174,24 @@ class CA(FullCert):
         # Generate our key
         private_key = encode.PrivIface(key_type).generate() # type: ignore[union-attr]
 
-        issuer = name           # A self-issued certificate
-        aki: Optional[x509.AuthorityKeyIdentifier] = None
-        if parent_cert is not None:
-            parent_certificate = parent_cert._certificate
-            issuer = parent_certificate.subject
-            aki = encode.get_aki(parent_certificate)
-
-        cert_builder = cert_builder_common(
-            name, issuer, private_key.public_key(),
-            self_signed = parent_cert is None
-        ).add_extension(
-            x509.BasicConstraints(ca=True, path_length=path_length),
-            critical=True,
-        ).add_extension(
-            CA_Usage,
-            critical=True,
-        )
-
-        if aki:
-            cert_builder = cert_builder.add_extension(aki, critical=False)
-        if san:
-            cert_builder = cert_builder.add_extension(san, critical=False)
+        info = CertInfo(name,
+                        san,
+                        private_key.public_key(),
+                        is_ca = True)
 
         if parent_cert:
-            certificate = parent_cert.sign_cert( cert_builder )
+            certificate = parent_cert.issue_cert(info,
+                                            path_length=path_length)
         else:
-            certificate = cert_builder.sign( private_key,
-                                  encode.PrivIface(key_type).hash_alg()
-                        )
+            certificate = info.build( None,
+                                      path_length=path_length ) \
+                              . sign( private_key,
+                                 encode.PrivIface(key_type).hash_alg()
+                                )
         return cls(PublicBlob(certificate).bytes(),
                    PrivateBlob(private_key).bytes())
 
-    def create_child_ca(self, name : x509.Name,
-                              san : x509.SubjectAlternativeName,
-                              key_type: str = "ed25519") -> "CA":
-        """Creates a child certificate authority
-
-        Args:
-          name: The x509 subject organization named by the certificate.
-          san: Alternative names for the organization named by the certificate.
-          key_type: type of key to generate
-
-        Returns:
-          CA: the newly-generated certificate authority
-
-        Raises:
-          ValueError: if the CA path length is 0
-        """
-        assert self._path_length is not None # although was validated before...
-        if self._path_length == 0:
-            raise ValueError("Can't create child CA: path length is 0")
-
-        path_length = self._path_length - 1
-        return CA.new(name, san,
-                      path_length = path_length,
-                      key_type = key_type,
-                      parent_cert = self)
-
-    def issue_cert(
+    def leaf_cert(
         self,
         name: x509.Name,
         san: x509.SubjectAlternativeName,
@@ -352,38 +224,16 @@ class CA(FullCert):
 
         Returns:
           LeafCert: the newly-generated certificate.
-
         """
 
         key = encode.PrivIface(key_type).generate() # type: ignore[union-attr]
+        info = CertInfo(name, san, key.public_key(), False)
 
-        aki = encode.get_aki(self._certificate)
-
-        cert_builder = cert_builder_common(
-                name,
-                self._certificate.subject,
-                key.public_key(),
-                not_before=not_before,
-                not_after=not_after,
-        ).add_extension(
-                x509.BasicConstraints(ca=False, path_length=None),
-                critical=True,
-        ).add_extension(
-                aki,
-                critical=False
-        ).add_extension(
-                san,
-                # EE subjectAltName MUST NOT be critical when subject is nonempty
-                critical=False,
-        ).add_extension(
-                EE_Usage,
-                critical=True,
-        ).add_extension(
-                EE_Extension,
-                critical=False,
-        )
-
-        cert = self.sign_cert(cert_builder)
+        cert = self.issue_cert(info,
+                    not_before = not_before,
+                    not_after = not_after,
+                    path_length = None
+                   )
 
         return LeafCert(
             PublicBlob(cert).bytes(),
