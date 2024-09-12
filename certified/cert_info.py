@@ -101,8 +101,8 @@ class CertInfo:
         return x509.Name( self.subject )
 
     def get_san(self) -> Optional[x509.SubjectAlternativeName]:
-        if not (self.is_ca or len(self.subject) == 0):
-            assert len(self.san) > 0, "SubjectAltName must be non-empty for non-CA."
+        #if not (self.is_ca or len(self.subject) == 0):
+        #    assert len(self.san) > 0, "SubjectAltName must be non-empty for non-CA."
         if len(self.san) == 0:
             return None
         return x509.SubjectAlternativeName(self.san)

@@ -55,6 +55,15 @@ URI = Annotated[ List[str],
 Config = Annotated[Optional[Path], typer.Option(
                         help="Config file path [default $VIRTUAL_ENV/etc/certified].") ]
 
+def load_certfile(crt : Path) -> x509.Certificate:
+    pem_data = crt.read_bytes()
+    asc_data = pem_data.decode('ascii').strip()
+    if asc_data.startswith('-----BEGIN CERTIFICATE-----\n'):
+        return x509.load_pem_x509_certificate(pem_data)
+    else:
+        return b64_to_cert(asc_data)
+
+
 @app.command()
 def init(name: Annotated[
                     Optional[str],
@@ -129,6 +138,88 @@ Example: 'Computing Directorate'
     return 0
 
 @app.command()
+def add_client(name : Annotated[
+                        str,
+                        typer.Argument(help="Client's name.")
+                    ],
+               crt : Annotated[
+                        Path,
+                        typer.Argument(help="Client's certificate (PEM or b64-DER).")
+                    ],
+               scopes : Annotated[
+                        str,
+                        typer.Argument(help="Whitespace-separated list of allowed scopes.")
+                    ] = "",
+               overwrite: Annotated[bool, typer.Option(
+                        help="Overwrite existing client.")
+                    ] = False,
+               config : Config = None):
+    """
+    Add the client directly to your `known_clients` list.
+
+    Note that this routine doesn't work for end-entities in practice
+    because x509 validation rules don't allow self-signed
+    certificates to be clients.
+
+    However, you can add a self-signed "root" this way
+    and trust all certificates granted through it.
+    """
+
+    cert = Certified(config)
+    c = load_certfile(crt)
+    # validate c is a signing cert (otherwise TLS balks)
+    assert encode.get_is_ca(c), "TLS doesn't allow trusting end-identies directly [sic]."
+
+    cert.add_client(name, c, scopes.split(), overwrite)
+
+    return 0
+
+@app.command()
+def add_service(name : Annotated[
+                        str,
+                        typer.Argument(help="Service's hostname[:port][/path-prefix].")
+                    ],
+               crt : Annotated[
+                        Path,
+                        typer.Argument(help="Service's public signing certificate (PEM or b64-DER).")
+                    ],
+               scopes : Annotated[
+                        str,
+                        typer.Argument(help="Whitespace-separated list of requested scopes for this server.")
+                    ] = "",
+               auth : Annotated[
+                        List[str],
+                        typer.Option(help="rfc4514 name of an authorizor whose signature would be recognized for authenticating to this server.")
+                    ] = [],
+               overwrite: Annotated[bool, typer.Option(
+                        help="Overwrite existing server.")
+                    ] = False,
+               config : Config = None) -> int:
+    """
+    Add the service directly to your `known_servers` list.
+    """
+
+    cert = Certified(config)
+
+    c = load_certfile(crt)
+    # validate c is a signing cert (otherwise TLS balks)
+    assert encode.get_is_ca(c), "TLS doesn't allow trusting end-identies directly [sic]."
+
+    xname = encode.rfc4514name(c.subject)
+    if xname not in auth: # services generally trust thes'selvs
+        auth.append(xname) 
+    # TODO: validate name is host[:port] (i.e. that https://{name} works)
+
+    srv = TrustedService(
+              url = f"https://{name}",
+              cert = cert_to_b64(c),
+              scopes = scopes.split(),
+              auths = auth
+            )
+    cert.add_service(name, srv, overwrite)
+    return 0
+
+@app.command()
 def introduce(crt : Annotated[
                         Path,
                         typer.Argument(help="Subject's certificate.")
@@ -175,83 +266,6 @@ def introduce(crt : Annotated[
     return 0
 
 @app.command()
-def add_client(name : Annotated[
-                        str,
-                        typer.Argument(help="Client's name.")
-                    ],
-               crt : Annotated[
-                        Path,
-                        typer.Argument(help="Client's certificate.")
-                    ],
-               scopes : Annotated[
-                        str,
-                        typer.Argument(help="Whitespace-separated list of allowed scopes.")
-                    ] = "",
-               overwrite: Annotated[bool, typer.Option(
-                        help="Overwrite existing client.")
-                    ] = False,
-               config : Config = None):
-    """
-    Add the client directly to your `known_clients` list.
-    """
-
-    cert = Certified(config)
-
-    pem_data = crt.read_bytes()
-    c = x509.load_pem_x509_certificate(pem_data)
-    cert.add_client(name, c, scopes.split(), overwrite)
-
-    return 0
-
-@app.command()
-def add_service(name : Annotated[
-                        str,
-                        typer.Argument(help="Service's hostname[:port][/path-prefix].")
-                    ],
-               crt : Annotated[
-                        Path,
-                        typer.Argument(help="Service's public signing certificate (PEM or b64-DER).")
-                    ],
-               scopes : Annotated[
-                        str,
-                        typer.Argument(help="Whitespace-separated list of requested scopes for this server.")
-                    ] = "",
-               auth : Annotated[
-                        List[str],
-                        typer.Option(help="An authorizor whose signature would be recognized for authenticating to this server.")
-                    ] = [],
-               overwrite: Annotated[bool, typer.Option(
-                        help="Overwrite existing server.")
-                    ] = False,
-               config : Config = None) -> int:
-    """
-    Add the service directly to your `known_servers` list.
-    """
-
-    cert = Certified(config)
-
-    pem_data = crt.read_bytes()
-    try:
-        c = x509.load_pem_x509_certificate(pem_data)
-    except ValueError:
-        c = b64_to_cert(pem_data.decode('ascii').strip())
-    # TODO: validate c is a signing cert (otherwise TLS balks)
-
-    xname = encode.rfc4514name(c.subject)
-    if xname not in auth: # services generally trust thes'selvs
-        auth.append(xname) 
-    # TODO: validate name is host[:port] (i.e. that https://{name} works)
-
-    srv = TrustedService(
-              url = f"https://{name}",
-              cert = cert_to_b64(c),
-              scopes = scopes.split(),
-              auths = auth
-            )
-    cert.add_service(name, srv, overwrite)
-    return 0
-
-@app.command()
 def add_intro(signature : Annotated[
                         Path,
                         typer.Argument(help='json signature response containing both "signed_cert" and "ca_cert".')
@@ -270,6 +284,28 @@ def add_intro(signature : Annotated[
 
     cert = Certified(config)
     cert.add_identity(signed_cert, ca_cert, overwrite)
+    return 0
+
+@app.command()
+def get_ident(config : Config = None) -> int:
+    """ Create a json copy of my certificate
+    suitable for sending to a signing authority.
+    """
+    cert = Certified(config)
+    id_cert = cert.identity().certificate
+    print(cert_to_b64(id_cert))
+    #s = json.dumps({"cert": cert_to_b64(id_cert)})
+    #print(s)
+    return 0
+
+@app.command()
+def get_signer(config : Config = None) -> int:
+    """ Create a json copy of my signing certificate.
+    """
+    cert = Certified(config)
+    id_cert = cert.signer().certificate
+    s = json.dumps({"ca_cert": cert_to_b64(id_cert)})
+    print(s)
     return 0
 
 """
