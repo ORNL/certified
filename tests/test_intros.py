@@ -1,7 +1,8 @@
+from typing import Tuple
 from pathlib import Path
 import time
 import os
-from typing import Tuple
+import json
 
 import pytest
 from typer.testing import CliRunner
@@ -9,13 +10,14 @@ import httpx
 from cryptography import x509
 
 from certified import Certified
+from certified.encode import rfc4514name
 from certified.test import child_process
 from certified.certified import app
 from certified.message import app as msg
 from certified.layout import check_config
 from certified.blob import Blob
 from certified.models import TrustedService
-from certified.serial import cert_to_b64, pem_to_cert
+from certified.serial import cert_to_b64, pem_to_cert, b64_to_cert
 
 runner = CliRunner()
 
@@ -126,21 +128,28 @@ def test_intro_id(tmp_path : Path) -> None:
                                  ])
     print(result.stdout)
     assert result.exit_code == 0
-    intro = result.stdout
-    assert "-----BEGIN CERTIFICATE-----" in intro
-    assert "-----END CERTIFICATE-----" in intro
+    (tmp_path/"intro.json").write_text(result.stdout)
+    intro = json.loads(result.stdout)
+    signed_cert = b64_to_cert(intro["signed_cert"])
+    assert isinstance(signed_cert, x509.Certificate)
+    ca_cert = b64_to_cert(intro["ca_cert"])
+    assert isinstance(ca_cert, x509.Certificate)
+    signed_cert.verify_directly_issued_by(ca_cert)
 
     # add the server's certificate to the client
     srv_ca = (srv/"CA.crt").read_text() # TODO: also test "id.crt" -- which throws self-signed cert. error :_(
+    srv_ca_crt = pem_to_cert(srv_ca)
     service = TrustedService(url = "127.0.0.1",
-                             cert = cert_to_b64(pem_to_cert(srv_ca)),
+                             cert = cert_to_b64(srv_ca_crt),
                              auths = ["test_auth"])
     with pytest.raises(AssertionError):
         # bad url (parses as path for some reason)
         Certified(cli).add_service("test", service)
+
+    xname = rfc4514name(srv_ca_crt.subject)
     service = TrustedService(url = "https://127.0.0.1",
-                             cert = cert_to_b64(pem_to_cert(srv_ca)),
-                             auths = ["test_auth"])
+                             cert = cert_to_b64(srv_ca_crt),
+                             auths = [xname])
     Certified(cli).add_service("test", service)
 
     # Phase 2 - run the server without and with the introduction.
@@ -155,9 +164,14 @@ def test_intro_id(tmp_path : Path) -> None:
     assert result.exit_code == 1
     assert isinstance(result.exception, KeyError)
 
-    # Write the introduction manually.
-    (cli/"id").mkdir(exist_ok=True)
-    (cli/"id"/"test_auth.crt").write_text(intro)
+    # Write the introduction
+    result = runner.invoke(app, [
+                    "add-intro", str(tmp_path/"intro.json"),
+                    "--config", str(cli)])
+    assert result.exit_code == 0
+    print(f"Looking for '{xname}.crt'")
+    assert (cli/"id"/f"{xname}.crt").exists()
+
     print("testing with-intro")
     assert can_connect(cli, srv, "test", 8314)
 

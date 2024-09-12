@@ -334,8 +334,46 @@ def get_aki(cert : x509.Certificate) -> x509.AuthorityKeyIdentifier:
                .from_issuer_subject_key_identifier(ski_ext.value)
 
 def rfc4514name(subject: x509.Name):
+    # By default, attributes CN, L, ST, O, OU, C, STREET, DC, UID are represented by their short name
+    # CN      commonName (2.5.4.3)
+    # L       localityName (2.5.4.7)
+    # ST      stateOrProvinceName (2.5.4.8)
+    # O       organizationName (2.5.4.10)
+    # OU      organizationalUnitName (2.5.4.11)
+    # C       countryName (2.5.4.6)
+    # STREET  streetAddress (2.5.4.9)
+    # DC      domainComponent (0.9.2342.19200300.100.1.25)
+    # UID     userId (0.9.2342.19200300.100.1.1)
+    #
+    # but, rfc5280 says we MUST be prepared for
+    #   x country
+    #   x organization
+    #   x organizational unit
+    #   - distinguished name qualifier,
+    #   x state or province name,
+    #   x common name (e.g., "Susan Housley"), and
+    #   - serial number.
+    # and SHOULD be prepared for
+    #   x locality,
+    #   - title,
+    #   - surname,
+    #   - given name,
+    #   - initials,
+    #   - pseudonym, and
+    #   - generation qualifier (e.g., "Jr.", "3rd", or "IV").
+    #
+    # apparently, STREET, UID, and DC are "free"
+
     return subject.rfc4514_string({
-                NameOID.EMAIL_ADDRESS: "E"
+                NameOID.PSEUDONYM: "P",
+                NameOID.DN_QUALIFIER: "DQ",
+                NameOID.SERIAL_NUMBER: "S",
+                NameOID.EMAIL_ADDRESS: "E",
+                NameOID.TITLE: "T",
+                NameOID.SURNAME: "SUR",
+                NameOID.GIVEN_NAME: "NAME",
+                NameOID.INITIALS: "IN",
+                NameOID.GENERATION_QUALIFIER: "GEN"
            })
 
 def get_path_length(cert: x509.Certificate) -> Optional[int]:

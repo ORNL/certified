@@ -58,7 +58,7 @@ def fixed_ssl_context(
 
 try:
     import uvicorn
-    uvicorn.config.create_ssl_context = fixed_ssl_context
+    #uvicorn.config.create_ssl_context = fixed_ssl_context
     # https://github.com/encode/uvicorn/discussions/2307
     from uvicorn.protocols.http.h11_impl import RequestResponseCycle
     responseCycleInit = RequestResponseCycle.__init__
@@ -171,7 +171,7 @@ class Certified:
             assert is_client, "Must be client to use TrustedService cfg."
         ctx = ssl_context(is_client)
         if not srv or len(srv.auths) == 0:
-            _logger.debug("Client - authenticating using id.crt")
+            _logger.debug("Will authenticate using id.crt")
             self.identity().configure_cert(ctx)
         else: # lookup any signature trusted by the server
             crt, chain = self.get_chain_from(srv.auths)
@@ -370,12 +370,18 @@ class Certified:
                         host = url.hostname,
                         port = url.port,
                         log_level = "info",
-                        ssl_cert_reqs = ssl.VerifyMode.CERT_REQUIRED,
-                        ssl_ca_certs  = cfg/"known_clients", # type: ignore[arg-type]
-                        ssl_certfile  = cfg/"id.crt",
-                        ssl_keyfile   = cfg/"id.key", # type: ignore[arg-type]
-                        ssl_keyfile_password = get_passwd, # type: ignore[arg-type]
+                        #ssl_cert_reqs = ssl.VerifyMode.CERT_REQUIRED,
+                        #ssl_ca_certs  = cfg/"known_clients", # type: ignore[arg-type]
+                        #ssl_certfile  = cfg/"id.crt",
+                        #ssl_keyfile   = cfg/"id.key", # type: ignore[arg-type]
+                        #ssl_keyfile_password = get_passwd, # type: ignore[arg-type]
                         http = "h11")
+
+
+            config.load() # https://github.com/encode/uvicorn/discussions/2339
+            _logger.debug("Using Certified's custom ssl context.")
+            config.ssl = self.ssl_context(False)
+
             if loki: # setup logging
                 configure_loki(str(app), loki)
             server = uvicorn.Server(config)

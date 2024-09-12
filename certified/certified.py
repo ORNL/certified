@@ -165,8 +165,13 @@ def introduce(crt : Annotated[
     except ValueError:
         csr = x509.load_pem_x509_certificate(pem_data)
     info = CertInfo.load(csr)
-    signed = cert.signer().issue_cert(info)
-    print( PublicBlob(signed).bytes().decode("utf-8").rstrip() )
+    signer = cert.signer()
+    signed = signer.issue_cert(info)
+    #print( PublicBlob(signed).bytes().decode("utf-8").rstrip() )
+    intro = { "signed_cert": cert_to_b64(signed),
+              "ca_cert": cert_to_b64(signer.certificate)
+            }
+    print( json.dumps(intro, indent=2) )
     return 0
 
 @app.command()
@@ -247,7 +252,7 @@ def add_service(name : Annotated[
     return 0
 
 @app.command()
-def add_identity(signature : Annotated[
+def add_intro(signature : Annotated[
                         Path,
                         typer.Argument(help='json signature response containing both "signed_cert" and "ca_cert".')
                     ],
@@ -255,10 +260,13 @@ def add_identity(signature : Annotated[
                         help="Overwrite existing authorization?")
                     ] = False,
                config : Config = None) -> int:
+    """ Add an introduction to use when authenticating
+    to servers that trust this signer.
+    """
     with open(signature) as f:
         data = json.load(f)
-    signed_cert = x509.load_pem_x509_certificate(data["signed_cert"])
-    ca_cert = x509.load_pem_x509_certificate(data["ca_cert"])
+    signed_cert = b64_to_cert(data["signed_cert"])
+    ca_cert = b64_to_cert(data["ca_cert"])
 
     cert = Certified(config)
     cert.add_identity(signed_cert, ca_cert, overwrite)

@@ -80,15 +80,26 @@ validation instead of using the TLS model.
         certified introduce /home/other_user/etc/certified/id.crt \
                   --scope user \
                   --config $VIRTUAL_ENV/etc/certified \
-                  >/home/other_user/etc/certified/id/anapi.crt 
+                  >/home/other_user/anapi.json
 
     Note: `--scope` is ignored at present.
 
     Of course, UNIX permissions don't allow doing this directly,
     but the basic idea is the same.  Both the other user's `id.crt`
-    file and your returned signature (`crt` file) are public
+    file and your returned signature (json file) are public
     documents, and can be exchanged in the open -- for example
     by email or via posting to github.
+
+    The `other_user` needs to do two things to use this
+    introduction.  First, they need to import it into their
+    certificate list,
+
+        certified add-intro /home/other_user/anapi.json \
+                --config /home/other_user/etc/certified
+
+    and then they need to create a yaml file describing the
+    service which requires it (using add-service mentioned
+    above).
 
     Technical Note: the service trusts itself as an authorizor by
     default because `CA.crt` is copied to the service's `trusted_clients`
