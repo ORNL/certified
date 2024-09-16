@@ -22,7 +22,7 @@ from .wrappers import ssl_context, configure_capath
 from .blob import Pstr, PWCallback, Blob
 from .models import TrustedService
 from .serial import pem_to_cert, cert_to_pem, b64_to_cert, cert_to_b64
-from .loki import configure as configure_loki
+from .loki import capture_logs
 
 def fixed_ssl_context(
     certfile: Pstr,
@@ -382,8 +382,7 @@ class Certified:
             _logger.debug("Using Certified's custom ssl context.")
             config.ssl = self.ssl_context(False)
 
-            if loki: # setup logging
-                configure_loki(str(app), loki)
+            capture_logs(str(app), loki)
             server = uvicorn.Server(config)
             asyncio.run( server.serve() )
         else:

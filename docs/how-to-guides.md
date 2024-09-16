@@ -214,3 +214,47 @@ We actually implement this internally with uvicorn's
                            "https://127.0.0.1:5000"))
 
     # ... calls uvicorn's python API
+
+## Configure Rich JSON Logging
+
+Certified serve runs your application through uvicorn,
+which provides some basic logging.  However, rich
+information about the client address, certificate common name,
+response time for each API call, etc. is not provided.
+
+The standard way to add rich logs with FastAPI is to create
+[middleware](https://fastapi.tiangolo.com/tutorial/middleware/)
+that gathers details from the [Request](https://www.starlette.io/requests/) and
+[Response](https://www.starlette.io/responses/) objects.
+`certified` provides a middleware that creates rich JSON logs.
+
+You can enable it in your applications using,
+
+    import logging
+    _logger = logging.getLogger(__name__)
+
+    from fastapi import FastAPI
+    app = FastAPI()
+    try:
+        from certified.formatter import log_request
+        app.middleware("http")(log_request)
+    except ImportError:
+        pass
+ 
+
+As a bonus, these logs can be sent to loki using a configuration
+option
+
+    certified serve --loki loki.json module:app
+
+The loki.json file should contain the URL for your loki
+server endpoint, as well as the user and password to use
+for basic authentication.
+
+    { "url": "https://logs-prod-00x.grafana.net/loki/api/v1/push",
+      "user": "1111",
+      "passwd": "long-b64-bassword"
+    }
+
+For additional information on loki, see its
+[setup documentation](https://grafana.com/docs/loki/latest/setup/).

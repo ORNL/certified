@@ -149,6 +149,11 @@ class CertInfo:
                 path_length = min(path_length or 0, plen - 1)
                 if path_length < 0:
                     raise ValueError("Unable to sign for a CA (insufficient path length).")
+            if not_before:
+                not_before = max(not_before, issuer.not_valid_before_utc)
+            if not_after:
+                not_after = min(not_after, issuer.not_valid_after_utc)
+            # FIXME: set these attributes to default values if None
 
         cert_builder = cert_builder_common(
             self.get_name(), issuer_name, self.pubkey,

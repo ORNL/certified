@@ -86,6 +86,79 @@ Preview the documentation with:
 
 Documentation was built using [this guide](https://realpython.com/python-project-documentation-with-mkdocs/) -- which comes highly recommended.
 
+# Roadmap
+
+* v0.8.1
+
+  - [x] use base64-encoded DER for storing keys in yaml files.
+
+  - [x] select certificate chain to send to server based on
+    server name (test server configs.)
+
+* v0.9.0
+
+  - [ ] better logging
+
+  - [ ] simpler introduction methodology
+
+* v1.0.0
+
+  - [ ] replace httpx with aiohttp. The Request object is awful.
+    Test client/server support is bad.
+
+  - [ ] add docs on how to use openssl to decode certificate contents
+
+  - [ ] change servers to services where appropriate
+
+  - [ ] throw warning if id.crt does not contain the server's
+    hostname in SAN (since this will usually result in a connection error
+    from SSL)
+
+* v1.0.10
+
+  - [ ] CI and better test coverage
+
+  - [ ] better documentation for known\_services
+        and interface for showing configuration contents
+
+* v 1.1.0
+
+  - [ ] Better documentation and more helpful error messages
+
+  - [ ] Demo presentations and lessons learned
+
+  - [ ] CLI interface for biscuit creation / validation
+
+* v1.2.0
+
+  - [ ] add certificate serial numbers
+
+  - [ ] save a log of all certificates signed and revoked
+    utilize CSR-s?
+    https://cryptography.io/en/latest/x509/tutorial/#creating-a-certificate-signing-request-csr
+
+  - [ ] support nng TLS sockets
+
+  - [ ] support GRPC library
+
+* v1.3.0
+
+  - [ ] key rotation features and docs
+
+## Technology to watch
+
+- hardware certificate implementations (plug-ins?)
+
+- OAuth2 integrations / biscuit adoption
+
+# List of Useful Microservices
+
+* <https://gitlab.com/frobnitzem/planner_api>
+
+* <https://github.com/frobnitzem/psik_api>
+
+* <https://gitlab.com/frobnitzem/signer>
+
 # References
 
 [mtls]: https://www.golinuxcloud.com/mutual-tls-authentication-mtls/ "Mutual TLS"
