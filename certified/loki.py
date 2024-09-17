@@ -59,7 +59,7 @@ def capture_logs(app_name: str,
     """ Setup all uvicorn and application logs to
     go to log_queue.
     """
-    logger = logging.getLogger(app_name)
+    logger = logging.getLogger(__name__)
 
     handler = logging.handlers.QueueHandler(log_queue)
     if formatter is None:
