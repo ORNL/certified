@@ -1,7 +1,7 @@
 site_name: Certified API docs
 
 theme:
-  name: "material"
+    name: "material"
 
 plugins:
   - mkdocstrings
