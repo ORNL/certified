@@ -33,21 +33,23 @@ def message(url: Annotated[
                 ],
          data : Annotated[
                     Optional[str],
-                    typer.Argument(help="json-formatted message body",
-                        rich_help_panel="""If present, the message is POST-ed to the URL.
+                    typer.Argument(
+                        rich_help_panel="json-formatted message body",
+                        help="""If present, the message is POST-ed to the URL.
 Example: '{"refs": [1,2], "query": "What's the weather?"}'
 """)
                 ] = None,
          H: Annotated[
                     List[str],
-                    typer.Option(help="headers to pass",
-                        rich_help_panel="""Interpreted as curl interprets them (split once on ": ").
+                    typer.Option("-H",
+                        rich_help_panel="headers to pass",
+                        help="""Interpreted as curl interprets them (split once on ": ").
 Example: -H "X-Token: ABC" gets parsed as headers = {"X-Token": "ABC"}.
 """)
                 ] = [],
          X: Annotated[
                     Optional[HTTPMethod],
-                    typer.Option(help="HTTP method to use."),
+                    typer.Option("-X", help="HTTP method to use."),
                 ] = None,
          v : bool = typer.Option(False, "-v", help="show info-level logs"),
          vv : bool = typer.Option(False, "-vv", help="show debug-level logs"),

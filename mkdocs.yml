@@ -8,6 +8,7 @@ plugins:
 
 nav:
   - Home: index.md
+  - Install: cli.md
   - Tutorials: tutorials.md
   - User Guide:
     - how-to-guides.md

@@ -37,8 +37,8 @@ Email = Annotated[ List[str],
                         rich_help_panel="Example: example@example.org"
                  ) ]
 Hostname = Annotated[ List[str],
-                      typer.Option(help="host names",
-                        rich_help_panel="""Examples:
+                      typer.Option(rich_help_panel="host names",
+                        help="""Examples:
     - "*.example.org"
     - "example.org"
     - "éxamplë.org"
@@ -49,8 +49,8 @@ Hostname = Annotated[ List[str],
     - "2001::/16"
 """) ]
 URI = Annotated[ List[str],
-                 typer.Option(help="uniform resource identifiers",
-                        rich_help_panel="Example: https://datatracker.ietf.org/doc/html/rfc3986#section-1.1.2"
+                 typer.Option(rich_help_panel="uniform resource identifiers",
+                        help="Example: https://datatracker.ietf.org/doc/html/rfc3986#section-1.1.2"
                ) ]
 Config = Annotated[Optional[Path], typer.Option(
                         help="Config file path [default $VIRTUAL_ENV/etc/certified].") ]
@@ -67,8 +67,8 @@ def load_certfile(crt : Path) -> x509.Certificate:
 @app.command()
 def init(name: Annotated[
                     Optional[str],
-                    typer.Argument(help="Person Name",
-                        rich_help_panel="""Note, name parsing into given and surnames
+                    typer.Argument(rich_help_panel="Person Name",
+                        help="""Note, name parsing into given and surnames
 and generations, etc. is not supported.
 
 Examples:
@@ -77,15 +77,15 @@ Examples:
                 ] = None,
          org: Annotated[
                     Optional[str],
-                    typer.Option(help="Organization Name",
-                        rich_help_panel="""If specified, unit must also be present and name cannot be present.
+                    typer.Option(rich_help_panel="Organization Name",
+                        help="""If specified, unit must also be present and name cannot be present.
 Example: 'Certificate Lab, Inc.'"
 """)
                 ] = None,
          unit: Annotated[
                     Optional[str],
-                    typer.Option(help="Organization Unit",
-                        rich_help_panel="""If specified, org must also be present and name cannot be present.
+                    typer.Option(rich_help_panel="Organization Unit",
+                        help="""If specified, org must also be present and name cannot be present.
 Example: 'Computing Directorate'
 """)
                 ] = None,
@@ -338,13 +338,13 @@ def grant(entity : str = typer.Argument(..., help="Grantee's name."),
 @app.command()
 def serve(app : Annotated[
                   str,
-                  typer.Argument(help="Server's ASGI application",
-                       rich_help_panel="Example: path.to.module:attr")
+                  typer.Argument(rich_help_panel="Server's ASGI application",
+                       help="Example: path.to.module:attr")
                 ],
           url : Annotated[
                   str,
-                  typer.Argument(help="URL to serve application",
-                       rich_help_panel="Example: https://127.0.0.1:8000")
+                  typer.Argument(rich_help_panel="URL to serve application",
+                       help="Example: https://127.0.0.1:8000")
                 ] = "https://0.0.0.0:4433",
           loki : Annotated[
                   Optional[str],

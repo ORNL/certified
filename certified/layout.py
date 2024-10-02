@@ -14,8 +14,8 @@ from pathlib import Path
 
 from .blob import Blob, is_user_only, Pstr
 
-def config(certified_config : Optional[Pstr] = None,
-           should_exist=True) -> Path:
+def config(certified_config: Optional[Pstr] = None,
+        should_exist: bool = True) -> Path:
     """Lookup and return the location of the certified-apis
     configuration directory.
 

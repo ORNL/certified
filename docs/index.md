@@ -1,5 +1,3 @@
-
-
 ## Table Of Contents
 
 <!--
@@ -8,6 +6,8 @@ project documentation as described by Daniele Procida
 in the [Diátaxis documentation framework](https://diataxis.fr/)
 and consists of four separate parts:
 -->
+
+1. [Installation and CLI](cli.md)
 
 1. [Tutorials](tutorials.md)
 
@@ -20,7 +20,7 @@ and consists of four separate parts:
 
 ## Acknowledgments
 
-This project was supported by the DOE Office of Science
+This work was supported by the Office of Science
+of the U.S. Department of Energy under Contract No. DE-AC05-00OR22725
 and would not have been possible without the many
 capable and talented colleagues there.
-
