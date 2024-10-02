@@ -101,6 +101,8 @@ Documentation was built using [this guide](https://realpython.com/python-project
 
   - [ ] simpler introduction methodology
 
+  - [ ] readthedocs integration
+
 * v1.0.0
 
   - [ ] replace httpx with aiohttp. The Request object is awful.

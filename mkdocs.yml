@@ -6,7 +6,6 @@ theme:
 plugins:
   - mkdocstrings
 
-
 nav:
   - Home: index.md
   - Tutorials: tutorials.md
