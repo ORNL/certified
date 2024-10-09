@@ -265,16 +265,8 @@ class Certified:
             return bis.PublicKey.from_bytes( pubkey )
         return bis.PublicKey.from_bytes( pubkey )
 
-    def biscuit_auth(self, token : str) -> int:
-        biscuit = bis.Biscuit.from_base64(token, self.lookup_public_key)
-        return 1
-        # TODO: check that client certificate SAN matches
-        # the biscuit phrase.
-        authorizer = bis.Authorizer(" time({now}); allow if user($u); ",
-                            {'now': datetime.now(tz = timezone.utc)}
-                     )
-        authorizer.add_token(biscuit)
-        return authorizer.authorize()
+    def biscuit(self, token : str) -> bis.Biscuit:
+        return bis.Biscuit.from_base64(token, self.lookup_public_key)
 
     @classmethod
     def new(cls,

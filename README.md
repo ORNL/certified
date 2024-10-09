@@ -97,11 +97,13 @@ Documentation was built using [this guide](https://realpython.com/python-project
 
 * v0.9.0
 
-  - [ ] better logging
+  - [X] better logging
 
-  - [ ] simpler introduction methodology
+  - [X] simpler introduction methodology
 
-  - [ ] readthedocs integration
+  - [X] readthedocs integration
+
+  - [X] biscuit examples
 
 * v1.0.0
 
