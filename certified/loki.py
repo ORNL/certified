@@ -16,7 +16,7 @@ from logging_loki import LokiHandler, LokiQueueHandler # type: ignore[import-unt
 from .formatter import RichFormatter
 from .models import LokiConfig
 
-Pstr = Union[str, os.PathLike[str]]
+Pstr = Union[str, "os.PathLike[str]"]
 
 log_queue : Queue = Queue(-1)
 

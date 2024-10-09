@@ -1,3 +1,8 @@
+[![CI](https://github.com/ORNL/certified/actions/workflows/python-package.yml/badge.svg)](https://github.com/ORNL/certified/actions)
+[![Docs](https://readthedocs.org/projects/certified/badge/)](https://certified.readthedocs.io)
+<!--[![Coverage](https://codecov.io/github/ORNL/certified/branch/main/graph/badge.svg)](https://app.codecov.io/gh/ORNL/certified)-->
+
+
 # Certified
 
 An idiomatic framework for using certificates
@@ -97,20 +102,24 @@ Documentation was built using [this guide](https://realpython.com/python-project
 
 * v0.9.0
 
-  - [ ] better logging
+  - [X] better logging
 
-  - [ ] simpler introduction methodology
+  - [X] simpler introduction methodology
 
-  - [ ] readthedocs integration
+  - [X] readthedocs integration
+
+  - [X] biscuit examples
 
 * v1.0.0
 
   - [ ] replace httpx with aiohttp. The Request object is awful.
     Test client/server support is bad.
 
-  - [ ] add docs on how to use openssl to decode certificate contents
-
   - [ ] change servers to services where appropriate
+
+* v1.0.2
+
+  - [ ] add docs on how to use openssl to decode certificate contents
 
   - [ ] throw warning if id.crt does not contain the server's
     hostname in SAN (since this will usually result in a connection error

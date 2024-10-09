@@ -16,7 +16,11 @@ from cryptography import x509
 import biscuit_auth as bis
 
 import certified.layout as layout
-from .encode import append_pseudonym, rfc4514name, get_is_ca
+from .encode import (
+    append_pseudonym,
+    rfc4514name,
+    get_is_ca,
+)
 from .ca import CA, LeafCert
 from .wrappers import ssl_context, configure_capath
 from .blob import Pstr, PWCallback, Blob
@@ -24,41 +28,8 @@ from .models import TrustedService
 from .serial import pem_to_cert, cert_to_pem, b64_to_cert, cert_to_b64
 from .loki import capture_logs
 
-def fixed_ssl_context(
-    certfile: Pstr,
-    keyfile: Optional[Pstr],
-    password,
-    ssl_version: int,
-    cert_reqs: int,
-    ca_certs: Optional[Pstr],
-    ciphers: Optional[str],
-) -> ssl.SSLContext:
-    ctx = ssl_context(is_client = False)
-    #ctx.verify_mode = ssl.VerifyMode(cert_reqs) # already required by (our) default
-    _logger.info("Using Certified's custom ssl context.")
-
-    if ciphers:
-        ctx.set_ciphers(ciphers)
-
-    ctx.load_cert_chain(certfile, keyfile, password)
-    if ca_certs:
-        ca_cert_path = Path(ca_certs)
-        if not ca_cert_path.exists():
-            ctx.load_verify_locations(cadata=str(ca_certs))
-        elif ca_cert_path.is_dir():
-            _logger.debug("reading certificates in %s to cadata since "
-                    "capath option to load_verify_locations is "
-                    "known not to work", ca_certs)
-            #ctx.load_verify_locations(capath=ca_certs)
-            configure_capath(ctx, ca_cert_path)
-        else:
-            ctx.load_verify_locations(cafile=ca_certs)
-    return ctx
-
-
 try:
     import uvicorn
-    #uvicorn.config.create_ssl_context = fixed_ssl_context
     # https://github.com/encode/uvicorn/discussions/2307
     from uvicorn.protocols.http.h11_impl import RequestResponseCycle
     responseCycleInit = RequestResponseCycle.__init__
@@ -261,20 +232,12 @@ class Certified:
     def lookup_public_key(self, kid : int) -> bis.PublicKey:
         # FIXME: use key serial numbers
         pubkey = self.signer().pubkey.public_bytes_raw()
-        if kid is None:
-            return bis.PublicKey.from_bytes( pubkey )
+        #if kid is None:
+        #    return bis.PublicKey.from_bytes( pubkey )
         return bis.PublicKey.from_bytes( pubkey )
 
-    def biscuit_auth(self, token : str) -> int:
-        biscuit = bis.Biscuit.from_base64(token, self.lookup_public_key)
-        return 1
-        # TODO: check that client certificate SAN matches
-        # the biscuit phrase.
-        authorizer = bis.Authorizer(" time({now}); allow if user($u); ",
-                            {'now': datetime.now(tz = timezone.utc)}
-                     )
-        authorizer.add_token(biscuit)
-        return authorizer.authorize()
+    #def biscuit(self, token : str) -> bis.Biscuit:
+    #    return bis.Biscuit.from_base64(token, self.lookup_public_key)
 
     @classmethod
     def new(cls,

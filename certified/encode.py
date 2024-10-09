@@ -37,9 +37,9 @@ __all__ = ["SAN", "name", "PrivIface", "hash_for_pubkey",
 
 class PrivIface:
     def __init__(self, keytype : str) -> None:
-        self.ed : Optional[type[
-                    ed25519.Ed25519PrivateKey|ed448.Ed448PrivateKey
-                ] ] = None
+        self.ed : Optional[type[Union[
+            ed25519.Ed25519PrivateKey,ed448.Ed448PrivateKey
+                ]]] = None
         self.ec : Optional[ Any ] = None
         if keytype == "ed25519":
             self.ed = ed25519.Ed25519PrivateKey
