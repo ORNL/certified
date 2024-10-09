@@ -8,8 +8,11 @@ from certified.wrappers import ssl_ify
 def client(sock, data) -> None:
         print('Sending: {}'.format(data))
         sock.send(data.encode())
-        rep = sock.recv(128)
-        print('Received: {}'.format(rep))
+        try:
+            rep = sock.recv(128)
+            print('Received: {}'.format(rep))
+        except ConnectionResetError:
+            pass
 
 @ssl_ify("server")
 def echo_server(sock) -> None:
