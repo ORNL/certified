@@ -15,8 +15,8 @@ jobs:
       matrix:
         #os: ["ubuntu-latest", "macos-latest"]
         os: ["ubuntu-latest"]
-          #python-version: ["3.8", "3.9", "3.11"]
-        python-version: ["3.8"]
+        #python-version: ["3.9", "3.11"]
+        python-version: ["3.9"]
 
     steps:
     - uses: actions/checkout@v3
@@ -30,7 +30,7 @@ jobs:
       run: |
         pip install poetry
         poetry config virtualenvs.create false
-        poetry install --with test,httpx
+        poetry install --with test,http
 
     - name: Test with pytest
       run: |
