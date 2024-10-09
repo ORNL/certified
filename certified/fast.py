@@ -4,16 +4,23 @@
 # So... do not import this file from other parts of certified
 # (except tests, where ImportError is handled).
 #
-from typing import Dict, Any, Annotated, Optional
+from typing import Dict, Any, Annotated, Optional, Union, List
 from collections.abc import Callable
 from datetime import datetime, timezone, timedelta
 
-from fastapi import Request, Depends, HTTPException
+from fastapi import Request, Depends, HTTPException, Header
 from .ca import CA
 
-from biscuit_auth as BiscuitBuilder, Authorizor
+from biscuit_auth import (
+        BiscuitBuilder,
+        Authorizer,
+        Biscuit,
+        PublicKey,
+        BiscuitValidationError,
+        AuthorizationError
+)
 
-async def get_peercert(request: Request) -> Dict[str,Any]:
+def get_peercert(request: Request) -> Dict[str,Any]:
     """FastAPI dependency for returning client cert. information
 
     Example return:
@@ -56,16 +63,15 @@ class Baker:
 
     >>> from certified.fast import Baker
     >>> cert = Certified()
-    >>> baker = Baker(__name__, cert.signer())
+    >>> baker = Baker(cert.signer())
     >>> app.post("/token")(baker.get_token)
     """
-    def __init__(self, app, ca : CA):
-        self.app = app
+    def __init__(self, ca : CA):
         self.ca = ca
 
-    async def get_token(self,
-                        hours : Optional[float] = 24.0,
-                        peer: PeerCert):
+    def get_token(self,
+                  peer: PeerCert,
+                  hours: Optional[float] = 24.0):
         """ Returns a biscuit certifying the user identity
         and token lifetime.
 
@@ -86,9 +92,8 @@ class Baker:
                 })
         biscuit = self.ca.sign_biscuit(builder)
         token = biscuit.to_base64()
-        return {"access_token": token, "token_type": "bearer"}
-    # biscuit.revocation_ids : List[bytes]
-
+        return token
+        #return {"access_token": token, "token_type": "bearer"}
 
 class BiscuitAuthz:
     """For additional help on using biscuit attributes
@@ -98,8 +103,10 @@ class BiscuitAuthz:
     check (critique) a token for a particular purpose.
 
     It may be used directly as follows:
+    >>> from biscuit_auth import PublicKey
+    >>> from certified.fast import BiscuitAuthz
     >>> app_name = __name__
-    >>> pubkey = ["authorizer pubkey"]
+    >>> pubkey = lambda i: PublicKey.from_bytes( "authorizer pubkey" )
     >>> DefaultAuthz = Annotated[bool, BiscuitAuthz(app_name, pubkey)]
     >>> async def get_info(info: str, authz: DefaultAuthz):
     >>>    # authz is always True here
@@ -112,13 +119,33 @@ class BiscuitAuthz:
     Note this is a parameterized dependency.
     See https://fastapi.tiangolo.com/advanced/advanced-dependencies
     """
+    app : str
+    pubkeys : Callable[[int], PublicKey]
+    scopes : List[str]
+    # TODO: maintain a set of revocations to check vs.
+    #       biscuit.revocation_ids : List[bytes]
+
     def __init__(self,
                  app: str,
-                 pubkeys: List[str],
-                 scopes: List[str]) -> None:
+                 pubkeys: Union[List[PublicKey],
+                                Callable[[int], PublicKey]],
+                 scopes: List[str] = []) -> None:
         self.app = app
-        self.pubkeys = pubkeys
+        
+        if isinstance(pubkeys, list):
+            self.pubkeys = lambda i: pubkeys[i]
+        else:
+            self.pubkeys = pubkeys
         self.scopes = scopes
+
+    def lookup_public_key(self, kid : Optional[int] = None
+                         ) -> PublicKey:
+        ans = self.pubkeys(kid or 0)
+        return ans
+
+    def biscuit(self, token : str) -> Biscuit:
+        # may throw BiscuitValidationError
+        return Biscuit.from_base64(token, self.lookup_public_key)
 
     def __call__(self,
                  peer: PeerCert,
@@ -128,10 +155,16 @@ class BiscuitAuthz:
             raise HTTPException(status_code=401, detail='Required header "Biscuit: b64-encoded-value" not found.')
 
         cli = name_from_peer(peer)
-        bis = self.parse_biscuit(biscuit)
+        try:
+            bis = self.biscuit(biscuit)
+        except BiscuitValidationError:
+            raise HTTPException(status_code=401, detail='Required header "Biscuit: b64-encoded-value" invalid format.')
 
         # TODO: add self.scopes to requirements:
         # check if role(scope) for scope in self.scopes
+        if len(self.scopes) > 0:
+            raise HTTPException(status_code=501, detail='not implemented')
+
         authorizer = Authorizer(
                     "time({now});"
                     " client({cli});"
@@ -145,23 +178,26 @@ class BiscuitAuthz:
                      'path': request.url.path,
                      'operation': request.method
                     })
+        print(authorizer)
         authorizer.add_token(bis)
         try:
             authorizer.authorize()
         # TODO: trap specific error...
-        except Exception:
+        except AuthorizationError:
             raise HTTPException(status_code=403, detail='Forbidden')
         return True
 
 def Critic(app: str,
-           pubkeys: List[str]
-          ) -> Callable[[List[str]],BiscuitAuthz]:
-    """Returns an Authorizor, which can be called
+           pubkeys: Union[List[PublicKey],
+                          Callable[[int], PublicKey]]
+          ) -> Callable[..., BiscuitAuthz]:
+    """Returns an Authorizer, which can be called
     with a list of scopes to add authentication to your
     FastAPI endpoint.
 
+    >>> from biscuit_auth import PublicKey
     >>> from certified.fast import Critic
-    >>> pubkeys = ["authorizor pubkey 0", "authorizor pubkey 1"]
+    >>> pubkey = [PublicKey.from_bytes(b"authorizer pubkey1"), PublicKey.from_bytes(b"authorizer pubkey2")]
     >>> Authz = Critic("frontend app name", pubkeys)
     >>> async def post_config(info: str, authz: Annotated[bool, Authz("admin:write")):
     >>>    # authz is always True here
@@ -171,11 +207,11 @@ def Critic(app: str,
     (of type BiscuitAuthz(app, pubkeys, "admin:write")),
     that dependency can gather data from:
      - the client certificate, providing client({id})
-     - the server path accessed, providing path({path})
-     - the call header, where a "Biscuit: b64-encoded-biscuit" is
+     - the URL accessed, providing path({path}) and operation({method})
+     - the call header, where a "Biscuit: b64_encoded_biscuit" is
        required
 
-    It then throws an HTTP Unauthorized if the biscuit auth fails,
-    or else returns True otherwise.
+    It then throws an HTTP Unauthorized/401 if a biscuit is missing,
+    Forbidden/403 if the biscuit auth fails, or else returns True otherwise.
     """
     return lambda *scopes: Depends(BiscuitAuthz(app, pubkeys, *scopes))

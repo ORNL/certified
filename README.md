@@ -110,9 +110,11 @@ Documentation was built using [this guide](https://realpython.com/python-project
   - [ ] replace httpx with aiohttp. The Request object is awful.
     Test client/server support is bad.
 
-  - [ ] add docs on how to use openssl to decode certificate contents
-
   - [ ] change servers to services where appropriate
+
+* v1.0.2
+
+  - [ ] add docs on how to use openssl to decode certificate contents
 
   - [ ] throw warning if id.crt does not contain the server's
     hostname in SAN (since this will usually result in a connection error

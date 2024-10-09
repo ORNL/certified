@@ -11,7 +11,7 @@ information about a request, and then calls the
 biscuit.
 
 Note that the client must provide a header like,
-"Biscuit: b64-encoded-biscuit" to successfully use
+"Biscuit: b64\_encoded\_biscuit" to successfully use
 authz-annotated API functions.
 
 
