@@ -1,3 +1,7 @@
+[![CI](https://github.com/ORNL/certified/actions/workflows/python-package.yml/badge.svg)](https://github.com/ORNL/certified/actions)
+[![Coverage](https://codecov.io/github/ORNL/certified/branch/main/graph/badge.svg)](https://app.codecov.io/gh/ORNL/certified)
+
+
 # Certified
 
 An idiomatic framework for using certificates
