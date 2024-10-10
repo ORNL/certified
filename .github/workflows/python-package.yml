@@ -38,8 +38,8 @@ jobs:
       run: |
         mypy certified tests
 
-#   - name: Upload coverage to Codecov
-#     if: matrix.python-version == 3.11 && startsWith(matrix.os, 'ubuntu')
-#     uses: codecov/codecov-action@v3
-#     env:
-#       CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+   - name: Upload coverage to Codecov
+     if: matrix.python-version == 3.11 && startsWith(matrix.os, 'ubuntu')
+     uses: codecov/codecov-action@v3
+     env:
+       CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
