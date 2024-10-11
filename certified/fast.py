@@ -20,6 +20,11 @@ from biscuit_auth import (
         AuthorizationError
 )
 
+def get_remote_addr(request: Request) -> Optional[str]:
+    if request.client is None:
+        return None
+    return request.client.host
+
 def get_peercert(request: Request) -> Dict[str,Any]:
     """FastAPI dependency for returning client cert. information
 
@@ -38,7 +43,10 @@ def get_peercert(request: Request) -> Dict[str,Any]:
     """
 
     transport = request.scope["transport"]
-    return transport.get_extra_info("peercert")
+    ans = transport.get_extra_info("peercert")
+    if ans is None:
+        return {}
+    return ans
 
 PeerCert = Annotated[Dict[str,Any], Depends(get_peercert)]
 
@@ -49,11 +57,30 @@ def name_from_peer(peer : Dict[str,Any]) -> str:
             if n[0] == 'commonName':
                 if name is None or name.startswith("cn:"):
                     name = f"cn:{n[1]}"
-            elif n[0] == 'userID':
+            elif n[0] == 'userID' or n[0] == 'userId':
                 name = f"uid:{n[1]}"
     if name is None:
-        raise ValueError("No usable name in peer certificate.")
+        raise KeyError("No usable name in peer certificate.")
     return name
+
+def get_clientname(request: Request) -> str:
+    """ A helper to return either (in priority order)
+
+    1. uid:{userid of client}
+    2. cn:{common name of client}
+    3. addr:{ip addr. of client}
+    """
+    cert = get_peercert(request)
+    try:
+        return name_from_peer(cert)
+    except KeyError:
+        addr = get_remote_addr(request)
+    if addr is None:
+        raise HTTPException(status_code=401,
+                            detail='Client identity is required.')
+    return f"addr:{addr}"
+
+ClientName = Annotated[str, Depends(get_clientname)]
 
 class Baker:
     """This class provides a "get_token" method
@@ -70,23 +97,22 @@ class Baker:
         self.ca = ca
 
     def get_token(self,
-                  peer: PeerCert,
+                  client: ClientName,
                   hours: Optional[float] = 24.0):
         """ Returns a biscuit certifying the user identity
         and token lifetime.
 
         Applications should supply this as their "/token" endpoint
         """
-        user_id = name_from_peer(peer)
         builder : BiscuitBuilder
         if hours is None:
             builder = BiscuitBuilder(
-                "user({user_id});", {'user_id': user_id})
+                "user({client});", {'client': client})
         else:
             builder = BiscuitBuilder(
-                "user({user_id});"
+                "user({client});"
                 " check if time($time), $time < {expiration};",
-                { 'user_id': user_id,
+                { 'client': client,
                   'expiration': datetime.now(tz=timezone.utc)
                                  + timedelta(hours=hours)
                 })
@@ -148,13 +174,12 @@ class BiscuitAuthz:
         return Biscuit.from_base64(token, self.lookup_public_key)
 
     def __call__(self,
-                 peer: PeerCert,
+                 client: ClientName,
                  request: Request,
                  biscuit: Annotated[Union[str,None],Header()] = None):
         if biscuit is None:
             raise HTTPException(status_code=401, detail='Required header "Biscuit: b64-encoded-value" not found.')
 
-        cli = name_from_peer(peer)
         try:
             bis = self.biscuit(biscuit)
         except BiscuitValidationError:
@@ -167,18 +192,17 @@ class BiscuitAuthz:
 
         authorizer = Authorizer(
                     "time({now});"
-                    " client({cli});"
+                    " client({client});"
                     " service({srv});"
                     " path({path});"
                     " operation({operation});"
                     " allow if user($user);",
                     {'now': datetime.now(tz = timezone.utc),
-                     'cli': cli,
+                     'client': client,
                      'srv': self.app,
                      'path': request.url.path,
                      'operation': request.method
                     })
-        print(authorizer)
         authorizer.add_token(bis)
         try:
             authorizer.authorize()
