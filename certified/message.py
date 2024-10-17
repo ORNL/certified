@@ -12,7 +12,7 @@ import logging
 _logger = logging.getLogger(__name__)
 
 import typer
-import yaml
+import yaml # type: ignore[import-untyped]
 
 from httpx import Request
 

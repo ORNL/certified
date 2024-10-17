@@ -1,14 +1,14 @@
 # Command-line interface to certified
 
-import os, sys, shutil
-import importlib
+import os, shutil
 import asyncio
 import json
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Optional, List, Union
+from typing import Optional, List, Union, Dict
 from typing_extensions import Annotated
 from urllib.parse import urlsplit, urlunsplit
+import binascii
 
 import logging
 _logger = logging.getLogger(__name__)
@@ -16,11 +16,13 @@ _logger = logging.getLogger(__name__)
 import typer
 
 import certified.encode as encode
+import certified.layout as layout
 from .blob import PublicBlob
 from .cert import Certified
 from .cert_info import CertInfo
+from .cert_base import load_pem_private_key
 from .models import TrustedService
-from .serial import cert_to_b64, b64_to_cert
+from .serial import cert_to_b64, b64_to_cert, cert_to_pem
 
 from cryptography import x509
 
@@ -62,7 +64,6 @@ def load_certfile(crt : Path) -> x509.Certificate:
         return x509.load_pem_x509_certificate(pem_data)
     else:
         return b64_to_cert(asc_data)
-
 
 @app.command()
 def init(name: Annotated[
@@ -168,7 +169,7 @@ def add_client(name : Annotated[
     cert = Certified(config)
     c = load_certfile(crt)
     # validate c is a signing cert (otherwise TLS balks)
-    assert encode.get_is_ca(c), "TLS doesn't allow trusting end-identies directly [sic]."
+    #assert encode.get_is_ca(c), "TLS doesn't allow trusting end-identies directly [sic]."
     # TODO: check for ideas at https://hg.python.org/cpython/rev/2afe5413d7af
 
     cert.add_client(name, c, scopes.split(), overwrite)
@@ -182,12 +183,8 @@ def add_service(name : Annotated[
                     ],
                crt : Annotated[
                         Path,
-                        typer.Argument(help="Service's public signing certificate (PEM or b64-DER).")
+                        typer.Argument(help="Service's public signing certificate (PEM or b64-DER or json with 'ca-root').")
                     ],
-               scopes : Annotated[
-                        str,
-                        typer.Argument(help="Whitespace-separated list of requested scopes for this server.")
-                    ] = "",
                auth : Annotated[
                         List[str],
                         typer.Option(help="rfc4514 name of an authorizor whose signature would be recognized for authenticating to this server.")
@@ -202,9 +199,15 @@ def add_service(name : Annotated[
 
     cert = Certified(config)
 
-    c = load_certfile(crt)
+    try:
+        c = load_certfile(crt)
+    except binascii.Error as e:
+        with open(crt, "r", encoding='utf-8') as f:
+            data = json.load(f)
+        c = b64_to_cert(data["ca_cert"])
+
     # validate c is a signing cert (otherwise TLS balks)
-    assert encode.get_is_ca(c), "TLS doesn't allow trusting end-identies directly [sic]."
+    #assert encode.get_is_ca(c), "TLS doesn't allow trusting end-identies directly [sic]."
 
     xname = encode.rfc4514name(c.subject)
     if xname not in auth: # services generally trust thes'selvs
@@ -214,9 +217,8 @@ def add_service(name : Annotated[
     srv = TrustedService(
               url = f"https://{name}",
               cert = cert_to_b64(c),
-              scopes = scopes.split(),
               auths = auth
-            )
+          )
     cert.add_service(name, srv, overwrite)
     return 0
 
@@ -285,6 +287,86 @@ def add_intro(signature : Annotated[
 
     cert = Certified(config)
     cert.add_identity(signed_cert, ca_cert, overwrite)
+    if "services" in data:
+        xname = encode.rfc4514name(ca_cert.subject)
+        add_services(cert,
+                     data["services"],
+                     cert_to_b64(ca_cert),
+                     [xname],
+                     overwrite)
+    return 0
+
+def add_services(cert: Certified,
+                 services: Dict[str,str],
+                 ca_cert: Optional[str] = None,
+                 auths: List[str] = [],
+                 overwrite: bool = False,
+                ) -> None:
+    for name, url in services.items():
+        srv = TrustedService(
+              url = url,
+              cert = ca_cert,
+              auths = auths
+            )
+        cert.add_service(name, srv, overwrite)
+
+@app.command()
+def set_org(signature : Annotated[
+                        Path,
+                        typer.Argument(help='json signature response containing both "signed_cert" and "ca_cert".')
+                    ],
+               overwrite: Annotated[bool, typer.Option(
+                        help="Overwrite existing authorization?")
+                    ] = False,
+               config : Config = None) -> int:
+    """ Setup this instance as a member of the signing organization.
+    Warning:
+
+    Removes certified/CA.crt certified/CA.key
+    Removes certified/known_*/self.crt
+    Removes certified/id
+    Removes certified/CA
+
+    Replaces certified/id.crt (with given cert).
+    Adds/Replaces certified/known_*/org.crt (if present)
+    """
+    assert overwrite, "This function requires --overwrite"
+    with open(signature) as f:
+        data = json.load(f)
+
+    signed_cert = b64_to_cert(data["signed_cert"])
+    ca_cert = b64_to_cert(data["ca_cert"])
+    cfg = layout.config(config)
+
+    # check that id.key matches this pubkey first!
+    pubkey = load_pem_private_key((cfg/"id.key").read_bytes(), None).public_key()
+    if signed_cert.public_key() != pubkey:
+        print("Error: new public key does not fit exising id.key.")
+        exit(1)
+
+    (cfg/"known_clients"/"org.crt").write_text(cert_to_pem(ca_cert))
+    (cfg/"known_servers"/"org.crt").write_text(cert_to_pem(ca_cert))
+    (cfg/"id.crt").write_text(cert_to_pem(signed_cert))
+    if (cfg/"id").is_dir():
+        shutil.rmtree(cfg/"id")
+
+    for n in ["CA.key", "CA.crt"]:
+        try:
+            os.remove(cfg/n)
+        except FileNotFoundError:
+            pass
+    if (cfg/"CA").is_dir():
+        shutil.rmtree(cfg/"CA")
+    for n in ["known_servers", "known_clients"]:
+        try:
+            os.remove(cfg/n/"self.crt")
+        except FileNotFoundError:
+            pass
+
+    if "services" in data:
+        cert = Certified(cfg)
+        add_services(cert, data["services"], overwrite=overwrite)
+    
     return 0
 
 @app.command()

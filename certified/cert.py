@@ -152,7 +152,7 @@ class Certified:
             LeafCert(crt, key.bytes(), chain_to_ca=[chain]).configure_cert(ctx)
             
         if is_client:
-            if srv is None:
+            if srv is None or srv.cert is None:
                 configure_capath(ctx, self.config/"known_servers")
             else:
                 # Use the server's specific certificate.

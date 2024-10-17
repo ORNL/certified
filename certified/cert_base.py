@@ -96,7 +96,7 @@ class FullCert:
 
     @property
     def serial(self) -> str:
-        return serial_number(self._certificate.serial_number)
+        return serial_number(self._certificate)
 
     @property
     def cert_pem(self) -> PublicBlob:
