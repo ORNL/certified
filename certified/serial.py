@@ -43,3 +43,10 @@ def der_to_b64(inp : bytes, alt : bool = True) -> str:
         return base64.b64encode(inp, altchars=b'-_').decode('ascii')
     x = base64.b64encode(inp)
     return urllib.parse.quote_plus(x)
+
+def serial_number(cert: x509.Certificate) -> str:
+    """A canonical way to print a certificate's 160-bit
+    serial number.  Returns a string of length 28.
+    """
+    inp = cert.serial_number.to_bytes(20, 'big')
+    return base64.b64encode(inp, altchars=b'-_').decode('ascii')

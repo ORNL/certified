@@ -14,7 +14,8 @@ Generate a certificate for a personal identity using,
 Generate a certificate for a server or microservice using,
 
     certified init --org 'My Company' --division 'My Org Unit' \
-                   --host 'my-api.org' --host 'localhost' \
+                   --domain my-api.org \
+                   --host '*.my-api.org' --host 'localhost' \
                    --email 'name@my-api.org' \
                    --config $VIRTUAL_ENV/etc/certified
 
@@ -23,6 +24,9 @@ represent different entities.
 Services need at least one `--host` defined that matches the URL
 the client will connect to.
 
+You can check your certificate contents using
+
+    openssl x509 -text -noout -in $VIRTUAL_ENV/etc/certified/id.crt
 
 ## Link your identity to a microservice
 
