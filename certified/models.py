@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Optional
 from pydantic import BaseModel, SecretStr
 
 class TrustedClient(BaseModel):
@@ -22,7 +22,7 @@ class TrustedService(BaseModel):
     server's configuration.
     """
     url    : str # server location
-    cert   : str # server b64-der certificate (or CA)
+    cert   : Optional[str] = None # server b64-der certificate (or CA)
     scopes : List[str] = [] # scopes client should request when using this service
     auths : List[str] = [] # names of validators recognized by this service
 

@@ -178,12 +178,11 @@ def test_intro_id(tmp_path : Path) -> None:
 def test_manual_add(tmp_path : Path) -> None:
     cli, srv = create_pair(tmp_path)
 
-    # A fatally stupid self-signed bug in x509 protocols
-    # prevents us from adding client ee-certs, so we
-    # apparently have to trust clients to sign certificates?
+    # Apparently adding client ee-certs
+    # requires VERIFY_X509_PARTIAL_CHAIN
+    # available in python/ssl 3.10+
     #
-    # We need to write our own validator to get around this,
-    # or else clients can't be added directly.
+    # Without that, clients can't be added directly.
     result = runner.invoke(app, ["add-client", "david", str(cli/"CA.crt"),
                                  "--config", str(srv)
                                  ])

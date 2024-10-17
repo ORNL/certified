@@ -110,6 +110,21 @@ Documentation was built using [this guide](https://realpython.com/python-project
 
   - [X] biscuit examples
 
+* v0.10.0
+
+  - [X] more feature-ful 'message' function
+
+  - [X] add docs on how to use openssl to decode certificate contents
+
+  - [X] configurable `biscuit_sec.Authorizor`-based biscuit auth
+
+  - [X] better user experience with add-intro (now adds services)
+
+  - [X] better user experience with add-service (will look for json with `ca_cert`)
+
+  - [X] better user experience setting up org-level microservice
+        `certified set-org`
+
 * v1.0.0
 
   - [ ] replace httpx with aiohttp. The Request object is awful.
@@ -118,8 +133,6 @@ Documentation was built using [this guide](https://realpython.com/python-project
   - [ ] change servers to services where appropriate
 
 * v1.0.2
-
-  - [ ] add docs on how to use openssl to decode certificate contents
 
   - [ ] throw warning if id.crt does not contain the server's
     hostname in SAN (since this will usually result in a connection error
