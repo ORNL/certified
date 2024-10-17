@@ -115,7 +115,7 @@ Example: 'Computing Directorate'
     if org or unit:
         assert unit, "If org is defined, unit must also be defined."
         assert org, "If unit is defined, org must also be defined."
-        assert name is None, "If org is defined, name must not be defined."
+        #assert name is None, "If org is defined, name must not be defined."
         assert uid is None, "If org is defined, uid must not be defined."
         xname = encode.org_name(org, unit,
                                 domain=domain.split('.'),
@@ -169,6 +169,7 @@ def add_client(name : Annotated[
     c = load_certfile(crt)
     # validate c is a signing cert (otherwise TLS balks)
     assert encode.get_is_ca(c), "TLS doesn't allow trusting end-identies directly [sic]."
+    # TODO: check for ideas at https://hg.python.org/cpython/rev/2afe5413d7af
 
     cert.add_client(name, c, scopes.split(), overwrite)
 

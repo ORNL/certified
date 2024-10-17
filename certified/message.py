@@ -6,11 +6,13 @@ from enum import Enum
 from typing import Optional, Dict, List
 from typing_extensions import Annotated
 from urllib.parse import urlsplit, urlunsplit
+from pathlib import Path
 
 import logging
 _logger = logging.getLogger(__name__)
 
 import typer
+import yaml
 
 from httpx import Request
 
@@ -39,6 +41,18 @@ def message(url: Annotated[
 Example: '{"refs": [1,2], "query": "What's the weather?"}'
 """)
                 ] = None,
+         json_file: Annotated[
+                    Optional[Path],
+                    typer.Option("--json",
+                        rich_help_panel="json-formatted message body",
+                        help="If present, contents are POST-ed to the URL.")
+                ] = None,
+         yaml_file: Annotated[
+                    Optional[Path],
+                    typer.Option("--yaml",
+                        rich_help_panel="yaml-formatted message body",
+                        help="If present, contents are converted to json and POST-ed to the URL.")
+                ] = None,
          H: Annotated[
                     List[str],
                     typer.Option("-H",
@@ -62,14 +76,33 @@ Example: -H "X-Token: ABC" gets parsed as headers = {"X-Token": "ABC"}.
     elif v:
         logging.basicConfig(level=logging.INFO)
 
+    has_data = False
+    if data is not None:
+        has_data = True
+        ddata = json.loads(data)
+    if json_file is not None:
+        assert not has_data, "Only one of <data> or --json or --yaml allowed."
+        has_data = True
+        with open(json_file, "r", encoding="utf-8") as f:
+            ddata = json.load(f)
+    if yaml_file is not None:
+        assert not has_data, "Only one of <data> or --json or --yaml allowed."
+        has_data = True
+        with open(yaml_file, "r", encoding="utf-8") as f:
+            ddata = yaml.safe_load(f)
+
     # Validate arguments
     if X is None:
-        X = HTTPMethod.POST if data else HTTPMethod.GET
+        X = HTTPMethod.POST if has_data else HTTPMethod.GET
 
     cert = Certified(config)
     headers : Dict[str,str] = {}
-    if data:
+
+    if has_data:
         headers["Content-Type"] = "application/json"
+        #assert X in [HTTPMethod.POST,
+        #             HTTPMethod.PUT,
+        #             HTTPMethod.PATCH]
     for hdr in H:
         u = hdr.split(": ", 1)
         if len(u) != 2:
@@ -82,13 +115,11 @@ Example: -H "X-Token: ABC" gets parsed as headers = {"X-Token": "ABC"}.
     url  = urlunsplit(("","",path,query,fragment))
 
     with cert.Client(base, headers=headers) as cli:
-        if data:
-            assert X == HTTPMethod.POST
-            ddata = json.loads(data)
-            resp = cli.post(url, json=ddata)
+        method = getattr(cli, X.value.lower())
+        if has_data:
+            resp = method(url, json=ddata)
         else:
-            assert X == HTTPMethod.GET
-            resp = cli.get(url)
+            resp = method(url)
     if resp.status_code != 200:
         return resp.status_code
 

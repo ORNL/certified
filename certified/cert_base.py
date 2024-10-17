@@ -47,7 +47,7 @@ from cryptography.hazmat.primitives.asymmetric import (
 from .blob import PublicBlob, PrivateBlob, Blob, Pstr, PWCallback
 import certified.encode as encode
 from .encode import CertificateIssuerPrivateKeyTypes, CertificatePublicKeyTypes
-from .serial import cert_to_pem
+from .serial import cert_to_pem, serial_number
 
 class FullCert:
     """ A full certificate contains both a certificate and private key.
@@ -93,6 +93,10 @@ class FullCert:
     @property
     def pubkey(self) -> CertificatePublicKeyTypes:
         return self._certificate.public_key()
+
+    @property
+    def serial(self) -> str:
+        return serial_number(self._certificate.serial_number)
 
     @property
     def cert_pem(self) -> PublicBlob:
