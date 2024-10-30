@@ -1,20 +1,20 @@
 # Command-line interface to interact with certified APIs
 
+import asyncio
 import os
 import json
 from enum import Enum
-from typing import Optional, Dict, List
+from typing import Optional, Dict, List, Union
 from typing_extensions import Annotated
 from urllib.parse import urlsplit, urlunsplit
 from pathlib import Path
+import sys
 
 import logging
 _logger = logging.getLogger(__name__)
 
 import typer
 import yaml # type: ignore[import-untyped]
-
-from httpx import Request
 
 from certified import Certified
 from .certified import Config
@@ -77,6 +77,7 @@ Example: -H "X-Token: ABC" gets parsed as headers = {"X-Token": "ABC"}.
         logging.basicConfig(level=logging.INFO)
 
     has_data = False
+    ddata = None
     if data is not None:
         has_data = True
         ddata = json.loads(data)
@@ -114,14 +115,16 @@ Example: -H "X-Token: ABC" gets parsed as headers = {"X-Token": "ABC"}.
     base = urlunsplit((scheme, netloc,"","",""))
     url  = urlunsplit(("","",path,query,fragment))
 
-    with cert.Client(base, headers=headers) as cli:
-        method = getattr(cli, X.value.lower())
-        if has_data:
-            resp = method(url, json=ddata)
-        else:
-            resp = method(url)
-    if resp.status_code != 200:
-        return resp.status_code
+    async def do_call() -> Union[int,str]:
+        async with cert.ClientSession(base, headers=headers) as cli:
+            async with cli.request(X.value, url, json=ddata) as resp:
+                msg = await resp.text()
+                if resp.status//100 != 2:
+                    print("Error: %s", msg, file=sys.stderr)
+                    return resp.status
+                return msg
 
-    print(resp.text)
-    return 0
+    ret = asyncio.run(do_call())
+    if isinstance(ret, int):
+        sys.exit( resp.status_code )
+    print(ret)
