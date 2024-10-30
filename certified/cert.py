@@ -3,7 +3,7 @@ import asyncio
 from typing import Union, Optional, Tuple, List, Any, Dict
 from urllib.parse import urlparse, urlunparse
 from urllib.parse import ParseResult as URL
-from contextlib import contextmanager
+from contextlib import contextmanager, asynccontextmanager
 from pathlib import Path, PurePosixPath
 from datetime import datetime, timedelta, timezone
 import ssl
@@ -40,6 +40,10 @@ try:
 except ImportError:
     uvicorn = None # type: ignore[assignment]
 
+try:
+    import aiohttp
+except ImportError:
+    aiohttp = None # type: ignore[assignment]
 try:
     import httpx
 except ImportError:
@@ -280,6 +284,34 @@ class Certified:
         shutil.copy(cfg/"CA.crt", cfg/"known_servers"/"self.crt")
         shutil.copy(cfg/"CA.crt", cfg/"known_clients"/"self.crt")
         return cls(cfg)
+
+    @asynccontextmanager
+    async def ClientSession(self, base_url: str = "", **kws):
+        """ Create an aiohttp.ClientSession context
+            that includes the current identity within
+            its ssl context (connector=...).
+        """
+        assert aiohttp is not None, "aiohttp is not available."
+
+        # Check whether this server corresponds to a known host.
+        url = urlparse(base_url)
+        assert url.port is None \
+                or url.netloc == f"{url.hostname}:{url.port}", "URL's netloc must define only a hostname and port."
+
+        srv = self.lookup_server(url.hostname)
+        if srv:
+            url = replace_baseurl(url, srv.url)
+
+        new_base = urlunparse(url)
+        if srv:
+            _logger.debug("Replaced %s with %s", base_url, new_base)
+
+        ssl_ctx = self.ssl_context(True, srv)
+        conn = aiohttp.TCPConnector(ssl_context=ssl_ctx)
+        async with aiohttp.ClientSession(base_url = new_base,
+                                         connector = conn,
+                                         **kws) as client:
+            yield client
 
     @contextmanager
     def Client(self, base_url : str = "", headers : Dict[str,str] = {}):
