@@ -44,6 +44,8 @@ def get_peercert(request: Request) -> Dict[str,Any]:
       }
     """
 
+    if "transport" not in request.scope:
+        return {}
     transport = request.scope["transport"]
     ans = transport.get_extra_info("peercert")
     if ans is None:

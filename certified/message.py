@@ -53,6 +53,12 @@ Example: '{"refs": [1,2], "query": "What's the weather?"}'
                         rich_help_panel="yaml-formatted message body",
                         help="If present, contents are converted to json and POST-ed to the URL.")
                 ] = None,
+         pp: Annotated[
+                    bool,
+                    typer.Option(
+                        rich_help_panel="pretty-print json output?",
+                        help="Re-format json output with spaces and indentation.")
+                ] = False,
          H: Annotated[
                     List[str],
                     typer.Option("-H",
@@ -118,13 +124,26 @@ Example: -H "X-Token: ABC" gets parsed as headers = {"X-Token": "ABC"}.
     async def do_call() -> Union[int,str]:
         async with cert.ClientSession(base, headers=headers) as cli:
             async with cli.request(X.value, url, json=ddata) as resp:
-                msg = await resp.text()
+                if pp:
+                    msg = json.dumps(await resp.json(), indent=2)
+                else:
+                    msg = await resp.text()
                 if resp.status//100 != 2:
                     print("Error: %s", msg, file=sys.stderr)
                     return resp.status
                 return msg
 
-    ret = asyncio.run(do_call())
+    try:
+        ret = asyncio.run(do_call())
+    except aiohttp.ClientConnectorError:
+        print("Connection error occurred", file=sys.stderr)
+    except asyncio.TimeoutError:
+        print("Request timed out", file=sys.stderr)
+    except aiohttp.InvalidURL:
+        print("Invalid URL provided", file=sys.stderr)
+    except aiohttp.ContentTypeError:
+        print("Unexpected content type in response",file=sys.stderr)
+
     if isinstance(ret, int):
         sys.exit( resp.status_code )
     print(ret)

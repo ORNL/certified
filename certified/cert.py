@@ -83,7 +83,7 @@ def replace_baseurl(url : URL, new_base : str) -> URL:
                params   = url.params,
                query    = url.query,
                fragment = url.fragment)
-               
+
 
 class Certified:
     def __init__(self, certified_config : Optional[Pstr] = None):
