@@ -156,3 +156,33 @@ audit log of all activity authorized by that credential.
 Users should ask for this from facilities that they
 regularly interact with, and spend time looking over
 their activity logs.
+
+# Visualizing certificates
+
+Apparenty, Firefox displays the contents of certificates
+you type into the browser bar if you format them properly.
+
+You can use this to visualize an introduction chain, by
+running the following code and then pasting the result
+into your browser bar.
+
+```
+import urllib.parse
+import json
+
+def scrub(c):
+    return urllib.parse.quote_plus (
+                c.replace("-", "+")
+                 .replace("_", "/"))
+
+def main(argv):
+    with open(argv[1], "r", encoding="utf-8") as f:
+        data = json.load(f)
+    c1 = scrub(data["signed_cert"])
+    c2 = scrub(data["ca_cert"])
+    print(f"about:certificate?cert={c1}&cert={c2}")
+
+if __name__=="__main__":
+    import sys
+    main(sys.argv)
+```

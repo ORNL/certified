@@ -82,28 +82,27 @@ validation instead of using the TLS model.
     by signing their identity:
 
         certified introduce /home/other_user/etc/certified/id.crt \
-                  --scope user \
                   --config $VIRTUAL_ENV/etc/certified \
-                  >/home/other_user/anapi.json
+                  >intro_letter.json
 
-    Note: `--scope` is ignored at present.
+    This should be read as "$VIRTUAL_ENV/etc/certified" vouches
+    for the identity of (introduces)
+    "/home/other_user/etc/certified/id.crt".
 
-    Of course, UNIX permissions don't allow doing this directly,
-    but the basic idea is the same.  Both the other user's `id.crt`
-    file and your returned signature (json file) are public
-    documents, and can be exchanged in the open -- for example
-    by email or via posting to github.
+    Both the other user's `id.crt` file and your returned
+    introduction letter (json file) are public documents, and can be exchanged
+    in the open -- for example by email or via posting to a git repo.
 
     The `other_user` needs to do two things to use this
     introduction.  First, they need to import it into their
     certificate list,
 
-        certified add-intro /home/other_user/anapi.json \
+        certified add-intro intro_letter.json \
                 --config /home/other_user/etc/certified
 
     and then they need to create a yaml file describing the
-    service which requires it (using add-service mentioned
-    above).
+    service which requires it.  Creating the yaml file is simplified
+    by using `certified add-service` as mentioned above.
 
     Technical Note: the service trusts itself as an authorizor by
     default because `CA.crt` is copied to the service's `trusted_clients`
@@ -167,8 +166,8 @@ the `message` utility:
     message https://my-api.org:8000/notes '{"message":"hello"}'
 
 You can also access servers programmatically using
-using the `Certified.Client` context.
-This context is an `httpx.Client` that bakes in the
+using the `Certified.ClientSession` context.
+This context is an `aiohttp.ClientSession` that bakes in the
 appropriate client and server certificates so that
 both sides can mutually authenticate one another.
 
@@ -177,14 +176,14 @@ An example:
     from certified import Certified
 
     cert = Certified()
-    with cert.Client("https://my-api.org:8000") as api:
-        r = api.get("/")
+    async with cert.ClientSession("https://my-api.org:8000") as api:
+        r = await api.get("/")
         assert r.status_code == 200, "Read error!"
-        print(r.json())
+        print(await r.json())
 
-        r = api.post("/notes", json={"message": "hello"})
+        r = await api.post("/notes", json={"message": "hello"})
         assert r.status_code == 200, "Post error!"
-        print(r.json())
+        print(await r.json())
 
 
 ## Run an API Server
@@ -218,6 +217,7 @@ We actually implement this internally with uvicorn's
                            "https://127.0.0.1:5000"))
 
     # ... calls uvicorn's python API
+
 
 ## Configure Rich JSON Logging
 

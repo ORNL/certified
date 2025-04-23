@@ -40,6 +40,7 @@ and microservice startup,
 │               you have checked both of the following:              │
 │ serve         Run the web server with HTTPS certificate-based      │
 │               trust setup.                                         │
+│ set-org       Setup this instance as a member of an organization.  │
 ╰────────────────────────────────────────────────────────────────────╯
 ```
 
@@ -52,34 +53,41 @@ and a client interface,
                                                                       
  Send a json-message to an mTLS-authenticated HTTPS-REST-API.         
                                                                       
-╭─ Arguments ────────────────────────────────────────────────────────╮
-│ *    url      TEXT  Service's Resource URL [default: None]         │
-│                     [required]                                     │
-╰────────────────────────────────────────────────────────────────────╯
-╭─ json-formatted message body ──────────────────────────────────────╮
-│   data      [DATA]  If present, the message is POST-ed to the URL. │
-│                     Example: '{"refs": [1,2], "query": "What's the │
-│                     weather?"}'                                    │
-│                     [default: None]                                │
-╰────────────────────────────────────────────────────────────────────╯
-╭─ Options ──────────────────────────────────────────────────────────╮
-│                     -X       [GET|POST|PUT|DEL  HTTP method to     │
-│                              ETE|PATCH]         use.               │
-│                                                 [default: None]    │
-│                     -v                          show info-level    │
-│                                                 logs               │
-│                     -vv                         show debug-level   │
-│                                                 logs               │
-│ --config                     PATH               Config file path   │
-│                                                 [default           │
-│                                                 $VIRTUAL_ENV/etc/… │
-│                                                 [default: None]    │
-│ --help                                          Show this message  │
-│                                                 and exit.          │
-╰────────────────────────────────────────────────────────────────────╯
-╭─ headers to pass ──────────────────────────────────────────────────╮
-│   -H      TEXT  Interpreted as curl interprets them (split once on │
-│                 ": "). Example: -H "X-Token: ABC" gets parsed as   │
-│                 headers = {"X-Token": "ABC"}.                      │
-╰────────────────────────────────────────────────────────────────────╯
+╭─ Arguments ──────────────────────────────────────────────────────────────────╮
+│ *    url      TEXT  Service's Resource URL [default: None] [required]        │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ json-formatted message body ────────────────────────────────────────────────╮
+│   data      [DATA]  If present, the message is POST-ed to the URL. Example:  │
+│                     '{"refs": [1,2], "query": "What's the weather?"}'        │
+│                     [default: None]                                          │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│                       -X       [GET|POST|PUT|DELETE|  HTTP method to use.    │
+│                                PATCH]                 [default: None]        │
+│                       -v                              show info-level logs   │
+│                       -vv                             show debug-level logs  │
+│ --config                       PATH                   Config file path       │
+│                                                       [default               │
+│                                                       $VIRTUAL_ENV/etc/cert… │
+│                                                       [default: None]        │
+│ --help                                                Show this message and  │
+│                                                       exit.                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ json-formatted message body ────────────────────────────────────────────────╮
+│ --json        PATH  If present, contents are POST-ed to the URL.             │
+│                     [default: None]                                          │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ yaml-formatted message body ────────────────────────────────────────────────╮
+│ --yaml        PATH  If present, contents are converted to json and POST-ed   │
+│                     to the URL.  [default: None]                             │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ pretty-print json output? ──────────────────────────────────────────────────╮
+│ --pp    --no-pp      Re-format json output with spaces and indentation.      │
+│                      [default: no-pp]                                        │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ headers to pass ────────────────────────────────────────────────────────────╮
+│   -H      TEXT  Interpreted as curl interprets them (split once on ": ").    │
+│                 Example: -H "X-Token: ABC" gets parsed as headers =          │
+│                 {"X-Token": "ABC"}.                                          │
+╰──────────────────────────────────────────────────────────────────────────────╯
 ```

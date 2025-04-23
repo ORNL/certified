@@ -14,6 +14,7 @@ import logging
 _logger = logging.getLogger(__name__)
 
 import typer
+import aiohttp
 import yaml # type: ignore[import-untyped]
 
 from certified import Certified
@@ -133,17 +134,19 @@ Example: -H "X-Token: ABC" gets parsed as headers = {"X-Token": "ABC"}.
                     return resp.status
                 return msg
 
+    ret = 1
     try:
         ret = asyncio.run(do_call())
-    except aiohttp.ClientConnectorError:
-        print("Connection error occurred", file=sys.stderr)
+    except aiohttp.ClientConnectorError as err:
+        print(f"Connection error occurred: {err}", file=sys.stderr)
     except asyncio.TimeoutError:
         print("Request timed out", file=sys.stderr)
     except aiohttp.InvalidURL:
         print("Invalid URL provided", file=sys.stderr)
-    except aiohttp.ContentTypeError:
-        print("Unexpected content type in response",file=sys.stderr)
+    except aiohttp.ContentTypeError as e:
+        print(f"Unexpected content type in response: {err}",file=sys.stderr)
 
     if isinstance(ret, int):
-        sys.exit( resp.status_code )
+        sys.exit( ret )
     print(ret)
+    sys.exit(0)

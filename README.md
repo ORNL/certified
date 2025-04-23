@@ -127,10 +127,9 @@ Documentation was built using [this guide](https://realpython.com/python-project
 
 * v1.0.0
 
-  - [ ] replace httpx with aiohttp. The Request object is awful.
-    Test client/server support is bad.
+  - [x] replace httpx with aiohttp (has better test client/server support).
 
-  - [ ] change servers to services where appropriate
+  - [x] change servers to services where appropriate
 
 * v1.0.2
 
