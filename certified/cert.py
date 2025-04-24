@@ -307,7 +307,8 @@ class Certified:
             _logger.debug("Replaced %s with %s", base_url, new_base)
 
         ssl_ctx = self.ssl_context(True, srv)
-        conn = aiohttp.TCPConnector(ssl_context=ssl_ctx)
+        #conn = aiohttp.TCPConnector(ssl_context=ssl_ctx)
+        conn = aiohttp.TCPConnector(ssl=ssl_ctx)
         async with aiohttp.ClientSession(base_url = new_base,
                                          connector = conn,
                                          **kws) as client:

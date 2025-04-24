@@ -261,7 +261,7 @@ def introduce(crt: Annotated[
         try:
             csr = x509.load_pem_x509_certificate(pem_data)
         except ValueError:
-            csr = b64_to_cert(pem_data.strip())
+            csr = b64_to_cert(pem_data.strip().decode('ascii'))
     info = CertInfo.load(csr)
     signer = cert.signer()
     signed = signer.issue_cert(info)

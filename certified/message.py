@@ -134,7 +134,7 @@ Example: -H "X-Token: ABC" gets parsed as headers = {"X-Token": "ABC"}.
                     return resp.status
                 return msg
 
-    ret = 1
+    ret: Union[int,str] = 1
     try:
         ret = asyncio.run(do_call())
     except aiohttp.ClientConnectorError as err:
@@ -143,7 +143,7 @@ Example: -H "X-Token: ABC" gets parsed as headers = {"X-Token": "ABC"}.
         print("Request timed out", file=sys.stderr)
     except aiohttp.InvalidURL:
         print("Invalid URL provided", file=sys.stderr)
-    except aiohttp.ContentTypeError as e:
+    except aiohttp.ContentTypeError as err:
         print(f"Unexpected content type in response: {err}",file=sys.stderr)
 
     if isinstance(ret, int):
