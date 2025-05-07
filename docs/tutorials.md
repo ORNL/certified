@@ -20,19 +20,24 @@ get started with the code in this project.
 
 ## Writing a client
 
-The httpx library provides a nice interface for
+The aiohttp library provides a nice interface for
 writing an API client.
 
-    import httpx
+    import asyncio
+    import aiohttp
 
     headers = { "user-agent": "my-app/0.0.1",
                 "Accept": "application/json" }
 
-    with httpx.Client(base_url="https://api.weather.gov",
-                      headers=headers) as cli:
-        resp = cli.get("points/28.3968,-80.6057")
-        assert resp.status_code == httpx.codes.OK
-        print( resp.json() )
+    async def main():
+        async with aiohttp.ClientSession(
+                    base_url="https://api.weather.gov",
+                    headers=headers) as session:
+            async with session.get("/points/28.3968,-80.6057") as resp:
+                assert resp.status == 200
+                print(await resp.json())
+
+    asyncio.run(main())
 
 This example queries the public
 [National Weather Service API](https://www.weather.gov/documentation/services-web-api) to get the weather forecast
@@ -55,8 +60,8 @@ equivalent of:
 By creating a client context object, we can avoid repeating
 the base URL and headers with every request.
 
-More examples of using httpx client methods are provided
-in their [quick start guide](https://www.python-httpx.org/quickstart/).
+More examples of using aiohttp client methods are provided
+in their [quick start guide](https://docs.aiohttp.org/en/stable/client_quickstart.html).
 
 
 ## Writing a server
@@ -121,4 +126,31 @@ will not trust your browser.
 
 ## Running the client with Certified
 
+To access this server, you can use the command-line message utility
+as you would for curl,
 
+    message --config my_id https://127.0.0.1:8000/echo/hello
+
+For more involved use cases, Certified provides a way to create
+an aiohttp ClientSession.  This session is correctly wrapped
+with the client ID and root certificates configured within your
+configuration directory.
+
+    import asyncio
+    from certified import Certified
+
+    cert = Certified("my_id")
+
+    headers = { "user-agent": "my-app/0.0.1",
+                "Accept": "application/json" }
+
+    async def main():
+        async with cert.ClientSession(
+                            base_url="https://127.0.0.1:8000",
+                        headers=headers
+                        ) as cli:
+            resp = await cli.get("/echo/Hello world!")
+            assert resp.status_code == 200
+            print( await resp.json() )
+
+    asyncio.run(main())

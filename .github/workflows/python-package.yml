@@ -28,7 +28,7 @@ jobs:
       run: |
         pip install poetry
         poetry config virtualenvs.create false
-        poetry install --with test,http
+        poetry install --with docs,dev --all-extras
 
     - name: Test with pytest
       run: |

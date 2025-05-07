@@ -223,11 +223,11 @@ def add_service(name : Annotated[
     return 0
 
 @app.command()
-def introduce(crt : Annotated[
-                        Path,
-                        typer.Argument(help="Subject's certificate.")
-                    ],
-              config : Config = None) -> int:
+def introduce(crt: Annotated[
+                       Path,
+                       typer.Argument(help="Subject's certificate.")
+                   ],
+              config: Config = None) -> int:
     """
     Write an introduction for the subject named by the
     certificate above.  Do not use this function unless
@@ -243,10 +243,11 @@ def introduce(crt : Annotated[
     longer trustworthy, and you'll need to create a new
     identity!
 
-    To use this introduction, the subject will need to place
+    To use this introduction, the subject will need to run
+    `certified add-intro`.  That command will place
     your response in their config. as `id/<your_name>.crt`
     or `CA/<your_name>.crt` (depending on which certificate
-    was signed).  They will also need to list <your_name>
+    was signed), as well as listing <your_name>
     within one of their `known_server/<server_name>.yaml` files.
     """
 
@@ -257,7 +258,10 @@ def introduce(crt : Annotated[
     try:
         csr = x509.load_pem_x509_csr(pem_data)
     except ValueError:
-        csr = x509.load_pem_x509_certificate(pem_data)
+        try:
+            csr = x509.load_pem_x509_certificate(pem_data)
+        except ValueError:
+            csr = b64_to_cert(pem_data.strip().decode('ascii'))
     info = CertInfo.load(csr)
     signer = cert.signer()
     signed = signer.issue_cert(info)
@@ -377,7 +381,10 @@ def get_ident(config : Config = None) -> int:
     cert = Certified(config)
     id_cert = cert.identity().certificate
     print(cert_to_b64(id_cert))
-    #s = json.dumps({"cert": cert_to_b64(id_cert)})
+    #sn_cert = cert.signer().certificate
+    #s = json.dumps({"cert": cert_to_b64(id_cert),
+    #                "ca_cert": cert_to_b64(sn_cert)
+    #               })
     #print(s)
     return 0
 
