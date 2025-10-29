@@ -1,6 +1,6 @@
 [project]
 name = "certified"
-version = "1.0.2"
+version = "1.1.0"
 description = "The missing certificate infrastructure for web APIs."
 authors = [{name="David M. Rogers", email="predictivestatmech@gmail.com"}]
 license = "BSD-3-Clause"
@@ -11,9 +11,9 @@ dependencies = [
   "cryptography>=43.0.1",
   "pydantic>=2.8.2,<3.0",
   "typer>=0.9",
-  "biscuit-python>=0.3.0",
+  "biscuit-python>=0.4.0,<0.5",
   "python-logging-loki>=0.3.1",
-  "pyyaml>=6.0.2,<7.0"
+  "pyyaml>=6.0.2,<7.0",
 ]
 
 [project.urls]
@@ -25,22 +25,34 @@ message   = "certified.message:app"
 certified = "certified.certified:app"
 
 [project.optional-dependencies]
-http = [ "uvicorn>=0.30.6",
-         "fastapi>=0.115.0",
-         "aiohttp>=3.10.10,<4.0",
-         "starlette>=0.40.0"
-       ]
+http = [
+ "uvicorn>=0.30.6",
+ "fastapi>=0.115.0",
+ "aiohttp>=3.10.10,<4.0",
+ "starlette>=0.40.0",
+]
 
-[tool.poetry.group.docs.dependencies]
-mkdocs = "*"
-mkdocstrings = {extras = ["python"], version = "^0.25.2"}
-mkdocs-material = "^9.5.30"
+docs = [
+    "mkdocs>=1.6,<2.0",
+    "mkdocstrings[python]>=0.26.1,<0.30",
+    "mkdocs-material>=9.5.30,<10.0",
+]
 
-[tool.poetry.group.dev.dependencies]
-pytest = "^8.3.2"
-mypy = "^1.11.1"
-pytest-cov = ">=4.1.0"
+dev = [
+    "pytest>=8.3.2",
+    "mypy>=1.11.1",
+    "pytest-cov>=4.1.0",
+    "httpx>=0.28.1",
+]
 
 [build-system]
-requires = ["poetry-core>=2.0"]
-build-backend = "poetry.core.masonry.api"
+requires = ["setuptools >= 61.0"]
+build-backend = "setuptools.build_meta"
+
+
+[tool.setuptools]
+include-package-data = false
+
+[tool.setuptools.packages.find]
+include = ["certified"]
+exclude = ["docs", "examples", "tests"]

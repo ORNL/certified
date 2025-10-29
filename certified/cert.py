@@ -45,7 +45,7 @@ try:
 except ImportError:
     aiohttp = None # type: ignore[assignment]
 try:
-    import httpx
+    import httpx # type: ignore[import-not-found]
 except ImportError:
     httpx = None # type: ignore[assignment]
 
@@ -238,7 +238,7 @@ class Certified:
         pubkey = self.signer().pubkey.public_bytes_raw()
         #if kid is None:
         #    return bis.PublicKey.from_bytes( pubkey )
-        return bis.PublicKey.from_bytes( pubkey )
+        return bis.PublicKey.from_bytes( pubkey, alg=bis.Algorithm.Ed25519 ) # type: ignore
 
     #def biscuit(self, token : str) -> bis.Biscuit:
     #    return bis.Biscuit.from_base64(token, self.lookup_public_key)

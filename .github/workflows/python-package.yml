@@ -26,17 +26,18 @@ jobs:
 
     - name: Install dependencies
       run: |
-        pip install poetry
-        poetry config virtualenvs.create false
-        poetry install --with docs,dev --all-extras
+        pip install uv
+        uv sync --extra dev --extra http
 
     - name: Test with pytest
       run: |
-        pytest --cov
+        uv run pytest --cov certified tests
+        #make test
 
     - name: Lint with mypy
       run: |
-        mypy certified tests
+        uv run mypy certified tests
+        #make check
 
     - name: Upload coverage to Codecov
       if: matrix.python-version == 3.11 && startsWith(matrix.os, 'ubuntu')
