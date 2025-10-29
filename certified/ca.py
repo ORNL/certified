@@ -148,9 +148,10 @@ class CA(FullCert):
         """
         assert isinstance(self._private_key, ed25519.Ed25519PrivateKey)
         return builder.build(
-            bis.PrivateKey.from_bytes(
+                bis.PrivateKey.from_bytes( # type: ignore[call-arg]
                         self._private_key
-                            .private_bytes_raw()
+                            .private_bytes_raw(),
+                            alg = bis.Algorithm.Ed25519, # type: ignore[attr-defined]
         ) )
 
     @classmethod

@@ -2,7 +2,7 @@ from typing import Annotated
 from datetime import datetime, timedelta, timezone
 
 import pytest
-from biscuit_auth import BiscuitBuilder, BlockBuilder, UnverifiedBiscuit, Authorizer, Rule, Fact, AuthorizationError
+from biscuit_auth import BiscuitBuilder, BlockBuilder, UnverifiedBiscuit, AuthorizerBuilder, Rule, Fact, AuthorizationError
 from fastapi import Depends, HTTPException
 
 from certified import encode, CA, Certified
@@ -103,25 +103,23 @@ def test_partial_auth() -> None:
     print(sgn)
     assert len(sgn.revocation_ids) == 1
 
-    authorizer = Authorizer( """ time({now}); allow if user($u); """, { 'now': datetime.now(tz = timezone.utc)} )
-    facts = authorizer.query(Rule("user($u) <- user($u)"))
-    assert len(facts) == 0
+    authorizer = AuthorizerBuilder( """ time({now}); allow if user($u); """, { 'now': datetime.now(tz = timezone.utc)} )
+    auth = authorizer.build(sgn)
 
-    authorizer.add_token(sgn)
-    facts = authorizer.query(Rule("user($u) <- user($u)"))
+    facts = auth.query(Rule("user($u) <- user($u)"))
     assert len(facts) == 1
     assert facts[0].name == 'user'
     assert tuple(facts[0].terms) == ('1234',)
-    authorizer.authorize()
+    auth.authorize()
 
-    authorizer = Authorizer( """ time({then}); allow if user($u); """, { 'then': datetime.now(tz = timezone.utc)+timedelta(days=10)} )
-    authorizer.add_token(sgn)
+    authorizer = AuthorizerBuilder( """ time({then}); allow if user($u); """, { 'then': datetime.now(tz = timezone.utc)+timedelta(days=10)} )
+    auth = authorizer.build(sgn)
     with pytest.raises(AuthorizationError):
-        authorizer.authorize()
+        auth.authorize()
 
     # snapshot, add a fact, and re-authorize
     snapshot = authorizer.base64_snapshot()
-    parsed = Authorizer.from_base64_snapshot(snapshot)
+    parsed = AuthorizerBuilder.from_base64_snapshot(snapshot)
     parsed.add_fact(Fact('time({now})',
                     {'now':datetime.now(tz = timezone.utc)}))
-    parsed.authorize()
+    parsed.build(sgn).authorize()

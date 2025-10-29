@@ -70,22 +70,22 @@ As a user, install with
 
 As a developer, install with:
 
-    poetry install --with docs,test
+    make install
 
 Add new dependencies using, e.g.:
 
-    poetry add pydantic          # run-time dependency
-    poetry add mkdocs-material --group docs # documentation-generation dep.
-    poetry add mypy            --group test # test-time dep.
+    uv add pydantic          # run-time dependency
+    uv add --optional docs mkdocs-material # documentation-generation dep.
+    uv add --dev mypy        # development dependency
 
 Run tests with:
 
-    poetry run mypy .
-    poetry run pytest
+    uv run mypy .
+    uv run pytest
 
 Preview the documentation with:
 
-    poetry run mkdocs serve &
+    uv run mkdocs serve &
 
 # Docs
 
@@ -131,20 +131,24 @@ Documentation was built using [this guide](https://realpython.com/python-project
 
   - [x] change servers to services where appropriate
 
-* v1.0.2
+* v1.1.0
 
-  - [ ] throw warning if id.crt does not contain the server's
-    hostname in SAN (since this will usually result in a connection error
-    from SSL)
+  - [x] fix biscuit\_auth dependency version and change to uv packaging
 
-* v1.0.10
+* v1.2.0
 
   - [ ] CI and better test coverage
 
   - [ ] better documentation for known\_services
         and interface for showing configuration contents
 
-* v 1.1.0
+* v1.2.1
+
+  - [ ] throw warning if id.crt does not contain the server's
+    hostname in SAN (since this will usually result in a connection error
+    from SSL)
+
+* v 1.3.0
 
   - [ ] Better documentation and more helpful error messages
 
@@ -152,7 +156,7 @@ Documentation was built using [this guide](https://realpython.com/python-project
 
   - [ ] CLI interface for biscuit creation / validation
 
-* v1.2.0
+* v1.4.0
 
   - [ ] add certificate serial numbers
 
@@ -164,7 +168,7 @@ Documentation was built using [this guide](https://realpython.com/python-project
 
   - [ ] support GRPC library
 
-* v1.3.0
+* v1.5.0
 
   - [ ] key rotation features and docs
 

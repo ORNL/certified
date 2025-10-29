@@ -14,6 +14,7 @@ from .ca import CA
 from biscuit_auth import (
         BiscuitBuilder,
         Authorizer,
+        AuthorizerBuilder,
         Biscuit,
         PublicKey,
         BiscuitValidationError,
@@ -126,11 +127,11 @@ class Baker:
         #return {"access_token": token, "token_type": "bearer"}
 
 class AuthMethod(Protocol):
-    def __call__(self, auth: Authorizer, revocation_ids: List[str]) -> bool:
+    def __call__(self, auth: AuthorizerBuilder, token: Biscuit) -> bool:
         return False
 
-def run_authz(auth: Authorizer, revocation_ids: List[str]) -> bool:
-    """ Default is to call authorizer.authorize()
+def run_authz(auth: AuthorizerBuilder, token: Biscuit) -> bool:
+    """ Default is to call auth.build(token).authorize()
         and ignore revocation id-s.
 
         This will ensure all the biscuit's (client-controlled)
@@ -138,10 +139,13 @@ def run_authz(auth: Authorizer, revocation_ids: List[str]) -> bool:
         requirements from the server's side other than
         that the certificate names a user.
     """
+    # Note: you should also examine
+    # token.revocation_ids
+
     #auth.add_policy(Policy('allow if true'))
     auth.add_policy(Policy('allow if user($u)'))
     try:
-        auth.authorize()
+        auth.build(token).authorize()
     except AuthorizationError:
         return False
     return True
@@ -212,7 +216,7 @@ class BiscuitAuthz:
         cert = get_peercert(request)
         client = get_clientname(request)
 
-        authorizer = Authorizer(
+        authorizer = AuthorizerBuilder(
                     "time({now});"
                     " client({client});"
                     " service({srv});"
@@ -227,8 +231,7 @@ class BiscuitAuthz:
         if 'serialNumber' in cert:
             authorizer.add_fact(Fact('client_serial({no})',
                                 {'no': cert['serialNumber']}))
-        authorizer.add_token(bis)
-        if not self.auth_method(authorizer, bis.revocation_ids):
+        if not self.auth_method(authorizer, bis):
             raise HTTPException(status_code=403, detail='Forbidden')
         return True
 
@@ -240,16 +243,21 @@ def Critic(app: str,
     with a custom authorizer to add authentication to your
     FastAPI endpoint.
 
-    >>> from biscuit_auth import PublicKey
+    The following example creates a list of accepted public keys,
+    then creates a custom authorizer which adds a check, and then
+    calls the rest of the auth chain.  When creating an API
+    route, Authz is a handy dependency to call this new auth chain.
+
+    >>> from biscuit_auth import PublicKey, AuthorizerBuilder, Biscuit
     >>> from certified.fast import Critic, run_authz
-    >>> pubkey = [PublicKey.from_bytes(b"authorizer pubkey1"), PublicKey.from_bytes(b"authorizer pubkey2")]
-    >>> def custom(authorizer, revoke_ids):
-    >>>    authorizer.add_code()
-    >>>    return run_authz(authorizer)
+    >>> pubkeys = [PublicKey("authorizer pubkey1"), PublicKey("authorizer pubkey2")]
+    >>> def custom(authorizer: AuthorizerBuilder, token: Biscuit) -> bool:
+    >>>    authorizer.add_code(...)
+    >>>    return run_authz(authorizer, token)
     >>> Authz = Critic("frontend app name", pubkeys)
     >>> async def post_config(info: str, authz: Annotated[bool, Authz(custom)):
-    >>>    # authz is always True here
-    >>>    set_info(info)
+    >>>    # authz is a check that is always True (or else FastAPI would have raised 403 already)
+    >>>    do_something_with(info)
 
     Since `Authz("admin:write")` has created a dependency
     (of type BiscuitAuthz(app, pubkeys, "admin:write")),

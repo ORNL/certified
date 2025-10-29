@@ -130,7 +130,7 @@ Example: -H "X-Token: ABC" gets parsed as headers = {"X-Token": "ABC"}.
                 else:
                     msg = await resp.text()
                 if resp.status//100 != 2:
-                    print("Error: %s", msg, file=sys.stderr)
+                    print("Error: %s"%msg, file=sys.stderr)
                     return resp.status
                 return msg
 
