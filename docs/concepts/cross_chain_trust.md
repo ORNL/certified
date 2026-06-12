@@ -85,9 +85,6 @@ certified/
 ```yaml
 url: https://api.org1.example:8443
 cert: <base64-DER Org1 CA certificate>
-scopes:
-- read
-- write
 auths:
 - CN=Org1 CA,O=Org1
 ```
@@ -148,8 +145,6 @@ certified/
 ```yaml
 url: https://api.org2.example:9443
 cert: <base64-DER Org2 CA certificate>
-scopes:
-- read
 auths:
 - CN=Org2 CA,O=Org2
 ```
@@ -180,7 +175,6 @@ TrustedService(
     url   = "https://api.org2.example:9443",
     cert  = "<b64-DER Org2 CA cert>",
     auths = ["CN=Org2 CA,O=Org2"],
-    scopes = ["read"],
 )
 ```
 

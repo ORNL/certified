@@ -260,15 +260,18 @@ Directly add a known client to `known_clients/`.  Note that end-entity
 CA certificate instead to trust all identities it signs.
 
 ```
- Usage: certified add-client [OPTIONS] NAME CRT [SCOPES]
+ Usage: certified add-client [OPTIONS] NAME CRT
 
  Add the client directly to your `known_clients` list.
- ...
+
+ Note that this routine doesn't work for end-entities in practice because
+ x509 validation rules don't allow self-signed certificates to be clients.
+ However, you can add a self-signed "root" this way and trust all
+ certificates granted through it.
 
 ╭─ Arguments ──────────────────────────────────────────────────────────────────╮
-│ *    name        TEXT      Client's name. [required]                         │
-│ *    crt         PATH      Client's certificate (PEM or b64-DER). [required] │
-│      scopes      [SCOPES]  Whitespace-separated list of allowed scopes.      │
+│ *    name      TEXT  Client's name. [required]                               │
+│ *    crt       PATH  Client's certificate (PEM or b64-DER). [required]       │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 ╭─ Options ────────────────────────────────────────────────────────────────────╮
 │ --overwrite    --no-overwrite          Overwrite existing client.            │

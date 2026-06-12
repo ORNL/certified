@@ -40,14 +40,8 @@ certified add-client external-org external_ca.pem \
     --config $VIRTUAL_ENV/etc/certified
 ```
 
-## Scopes (metadata only)
+## Authorisation
 
-The `SCOPES` argument stores a whitespace-separated scope list alongside the
-cert entry.  These are metadata — the server does **not** enforce them
-automatically.  Wire them into your authorisation logic via the
-[`certified.fast`](../reference/fast.md) FastAPI integration.
-
-```bash
-certified add-client partner-org partner_ca.pem "read write" \
-    --config $VIRTUAL_ENV/etc/certified
-```
+`add-client` controls *authentication* — who is allowed to connect.
+What a connected client is *permitted to do* is handled separately by the
+biscuit layer.  See [Authorization Model](../concepts/authz.md).

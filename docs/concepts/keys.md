@@ -63,17 +63,13 @@ Inside the base directory, `Certified` expects the following layout:
       any API started with `certified serve`
       (similar to `.ssh/authorized_keys`).
 
-    * A `name.scope` file next to a `name.crt` gives a newline-separated
-      list of allowed scopes for clients authenticating via that cert.
-
     * Adding a CA certificate here indirectly grants access to all clients
       holding a cert signed by that CA.
 
     !!! note
-        `certificatePolicies` OIDs embedded in client certs are ignored.
-        Allowed scopes are managed entirely via the editable `.scope` text
-        files, not via cert policy fields.  This is a deliberate design
-        choice: scope management should not require re-issuing certificates.
+        Certificates establish *identity* — they say nothing about what an
+        authenticated client is permitted to do.  Authorisation is handled
+        entirely by the biscuit layer.  See [Authorization Model](authz.md).
 
 ## Supported Key Types
 

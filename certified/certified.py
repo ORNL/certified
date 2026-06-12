@@ -147,10 +147,6 @@ def add_client(name : Annotated[
                         Path,
                         typer.Argument(help="Client's certificate (PEM or b64-DER).")
                     ],
-               scopes : Annotated[
-                        str,
-                        typer.Argument(help="Whitespace-separated list of allowed scopes.")
-                    ] = "",
                overwrite: Annotated[bool, typer.Option(
                         help="Overwrite existing client.")
                     ] = False,
@@ -172,7 +168,7 @@ def add_client(name : Annotated[
     #assert encode.get_is_ca(c), "TLS doesn't allow trusting end-identies directly [sic]."
     # TODO: check for ideas at https://hg.python.org/cpython/rev/2afe5413d7af
 
-    cert.add_client(name, c, scopes.split(), overwrite)
+    cert.add_client(name, c, overwrite)
 
     return 0
 
@@ -434,33 +430,6 @@ def get_signer(config : Config = None) -> int:
     s = json.dumps({"ca_cert": cert_to_b64(id_cert)})
     print(s)
     return 0
-
-"""
-@app.command()
-def grant(entity : str = typer.Argument(..., help="Grantee's name."),
-          pubkey : str = typer.Argument(..., help="Grantee's pubkey to sign"),
-          scopes : str = typer.Argument("", help="Whitespace-separated list of scopes to grant."),
-          hours  : float = typer.Option(10.0, help="Hours until expiration."),
-          config : Optional[Path] = typer.Option(None, help="Config file path [default ~/.config/actors.json].")):
-    # Sign a biscuit and print it to stdout.
-    config = cfgfile(config)
-    cfg = Config.model_validate_json(open(config).read())
-    #print(f"Granting actor {entity} pubkey {pubkey} and {scopes}")
-
-    lifetime = timedelta(hours=hours)
-
-    pubkey = PubKey(pubkey) # validate the pubkey's format
-    grant = Grant( grantor = cfg.name
-                 , entity = entity
-                 , attr = {'scopes': scopes,
-                           'pubkey': str(pubkey)
-                          }
-                 , expiration = datetime.now().astimezone()  + lifetime
-                 )
-    sgrant = signGrant(grant, cfg.privkey)
-    s = json.dumps({"grants": {cfg.name: to_jsonable_python(sgrant)}}, indent=4)
-    print(s)
-"""
 
 @app.command()
 def serve(app : Annotated[

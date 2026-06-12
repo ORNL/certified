@@ -170,7 +170,6 @@ class Certified:
     def add_client(self,
                    name: Pstr,
                    cert: x509.Certificate,
-                   scopes: List[str] = [],
                    overwrite: bool = False) -> None:
         """ Add the certificate to `known_clients`
             with the given name.
