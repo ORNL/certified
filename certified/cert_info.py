@@ -131,8 +131,8 @@ class CertInfo:
             argument type is `datetime.datetime`.
             Defaults to 365 days after `not_before`.
 
-          key_type: Set the type of key that is used for the certificate.
-            By default this is an ed25519 based key.
+          path_length: Maximum CA path length for CA certificates. Clamped to
+            issuer's path length minus one if signing for a CA.
 
         Returns:
           cryptography.x509.CertificateBuilder

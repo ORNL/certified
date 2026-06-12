@@ -307,7 +307,6 @@ def get_urls(cert : x509.Certificate) -> List[str]:
 
     urls = []
     for n in san.value:
-        print(n)
         if isinstance(n, x509.DNSName):
             urls.append(n.value)
         elif isinstance(n, x509.IPAddress):

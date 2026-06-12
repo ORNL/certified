@@ -15,7 +15,7 @@ as well as reasoning about how it was implemented.
     here
 -->
 
-# Certificates and Signed Tokens
+# Certificates vs Tokens
 
 Certificates and signatures (including signed tokens)
 are fundamentally about providing logical

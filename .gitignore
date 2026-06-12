@@ -3,3 +3,8 @@
 *.crt
 *.pyc
 __pycache__
+site/
+html/
+*.egg-info/
+.venv/
+.pytest_cache/

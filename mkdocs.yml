@@ -6,13 +6,42 @@ theme:
 plugins:
   - mkdocstrings
 
+exclude_docs: |
+  certs.md
+  reference.md
+  how-to-guides.md
+  explanation.md
+
 nav:
   - Home: index.md
   - Install: cli.md
   - Tutorials: tutorials.md
-  - User Guide:
-    - how-to-guides.md
+  - How-To Guides:
+    - howto/index.md
+    - "Create an identity": howto/init.md
+    - "Inspect certificates": howto/inspect.md
+    - "Cross-org introduction": howto/introduce.md
+    - "Add a known service": howto/add-service.md
+    - "Trust a client": howto/add-client.md
+    - "Join an organization": howto/set-org.md
+    - "Call an mTLS API": howto/api-client.md
+    - "Run an mTLS server": howto/api-server.md
+    - "Rich JSON logging": howto/logging.md
+  - Concept Guide:
+    - concepts/index.md
+    - "Key Management": concepts/keys.md
+    - "Cross-chain Trust": concepts/cross_chain_trust.md
+    - "Authorization Model": concepts/authz.md
+    - "Certificates vs Tokens": concepts/certs_vs_tokens.md
   - Reference:
-    - certs.md
-    - "Configuration / Keyfile Layout": keys.md
-  - "Concept Guide": explanation.md
+    - reference/index.md
+    - reference/cert.md
+    - reference/ca.md
+    - reference/cert_base.md
+    - reference/cert_info.md
+    - reference/encode.md
+    - reference/serial.md
+    - reference/models.md
+    - reference/fast.md
+    - reference/layout.md
+    - reference/blob.md
