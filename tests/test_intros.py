@@ -109,7 +109,6 @@ def create_pair(tmp_path : Path) -> Tuple[Path,Path]:
     assert len(err) == 0
     return cli, srv
 
-@pytest.mark.skip("aiohttp upgrade needed.")
 def test_intro_id(tmp_path : Path) -> None:
     cli, srv = create_pair(tmp_path)
     print("testing server self-connection")
@@ -180,7 +179,6 @@ def test_intro_id(tmp_path : Path) -> None:
     print("testing with-intro")
     assert can_connect(cli, srv, "test", 8314)
 
-@pytest.mark.skip("aiohttp upgrade needed.")
 def test_manual_add(tmp_path : Path) -> None:
     cli, srv = create_pair(tmp_path)
 
