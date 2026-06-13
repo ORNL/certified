@@ -11,10 +11,3 @@ See [Configuration / Keyfile Layout](../concepts/keys.md) for the directory stru
 
 ::: certified.layout.check_config
 
-## CRTDir
-
-::: certified.layout.CRTDir
-
-## Identity
-
-::: certified.layout.Identity

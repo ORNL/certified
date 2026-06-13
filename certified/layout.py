@@ -8,7 +8,7 @@ The configuration uses a $HOME/.ssh directory-style
 layout.  See details in [docs/keys](/docs/keys.md).
 """
 
-from typing import Union, Optional, Tuple, List, Any, Callable, Dict
+from typing import Optional, Tuple, List
 import os
 from pathlib import Path
 
@@ -55,32 +55,6 @@ def config(certified_config: Optional[Pstr] = None,
         if p.exists() and not p.is_dir():
             raise NotADirectoryError(str(p))
     return p
-
-class CRTDir:
-    """ Interface to a directory containing PEM-formatted
-        certificates.
-    """
-    def __init__(self, base : Path):
-        self.base = base
-
-    def __getitem__(self, name):
-        return Blob.read(name + ".crt")
-
-    # Note: openssl's -CApath option points to
-    # a directory of these, so we can use that to specify
-    # a directory of trust roots, if available.
-
-    #def check(self):
-    #    for child in self.base.iterdir():
-    #        assert not child.is_dir()
-    #        assert child.suffix == ".crt", "Invalid format."
-
-class Identity(CRTDir):
-    def __init__(self, base : Path):
-        super().__init__(base)
-
-    def key(self, name : Pstr) -> Blob:
-        return Blob.read( str(name) + ".key")
 
 def check_config(base : Path) -> Tuple[List[str], List[str]]:
     """ Scans the base configuration directory and

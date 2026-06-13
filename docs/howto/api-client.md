@@ -61,7 +61,36 @@ with cert.Client("https://my-api:8443") as http:
 
 The base URL alias is resolved against `known_servers/` automatically.
 
+## `Certified.AsyncClient` — async (httpx)
+
+Use this when a library expects an `httpx.AsyncClient` — for example the
+A2A SDK, LangChain, or any framework with native httpx support.
+
+```python
+import asyncio
+from certified import Certified
+
+async def main():
+    cert = Certified()
+    async with cert.AsyncClient("https://my-api:8443") as http:
+        r = await http.get("/notes")
+        r.raise_for_status()
+        print(r.json())
+
+        r = await http.post("/notes", json={"message": "hello"})
+        r.raise_for_status()
+
+asyncio.run(main())
+```
+
+See [`Certified.AsyncClient`][certified.cert.Certified.AsyncClient] in the reference.
+
 ## `Certified.ClientSession` — async (aiohttp)
+
+Use this when you need aiohttp-specific features such as WebSockets or when
+working with existing aiohttp-based test infrastructure.
+An httpx async client is also available as
+[`AsyncClient`][certified.cert.Certified.AsyncClient] above.
 
 ```python
 import asyncio
@@ -82,7 +111,7 @@ asyncio.run(main())
 
 ## How alias resolution works
 
-Both `Client` and `ClientSession` call `lookup_server(hostname)`, which reads
+All three client methods (`Client`, `AsyncClient`, `ClientSession`) call `lookup_server(hostname)`, which reads
 `known_servers/<hostname>.yaml`.  If found:
 
 1. The real `url` from the YAML replaces the alias in the request URL.

@@ -325,6 +325,10 @@ class Certified:
         """ Create an httpx.Client context
             that includes the current identity within
             its ssl context.
+
+            Use this for synchronous code. For async code see
+            [`AsyncClient`][certified.cert.Certified.AsyncClient] (httpx) or
+            [`ClientSession`][certified.cert.Certified.ClientSession] (aiohttp).
         """
         assert httpx is not None, "httpx is not available."
 
@@ -346,6 +350,49 @@ class Certified:
         with httpx.Client(base_url = new_base,
                           headers = headers,
                           verify = ssl_ctx) as client:
+            yield client
+
+    @asynccontextmanager
+    async def AsyncClient(self, base_url : str = "", headers : Dict[str,str] = {}):
+        """ Create an httpx.AsyncClient context
+            that includes the current identity within
+            its ssl context.
+
+            Use this for async code when you need an `httpx.AsyncClient` —
+            for example when integrating with frameworks such as A2A, LangChain,
+            or any library that accepts `httpx.AsyncClient` directly.
+
+            For aiohttp-based async code (e.g. existing tests or WebSocket
+            support) use [`ClientSession`][certified.cert.Certified.ClientSession]
+            instead.
+
+            Example:
+            ```python
+            cert = Certified()
+            async with cert.AsyncClient("https://my-api:8443") as http:
+                r = await http.get("/notes")
+                r.raise_for_status()
+                print(r.json())
+            ```
+        """
+        assert httpx is not None, "httpx is not available."
+
+        url = urlparse(base_url)
+        assert url.port is None \
+                or url.netloc == f"{url.hostname}:{url.port}", "URL's netloc must define only a hostname and port."
+
+        srv = self.lookup_server(url.hostname)
+        if srv:
+            url = replace_baseurl(url, srv.url)
+
+        new_base = urlunparse(url)
+        if srv:
+            _logger.debug("Replaced %s with %s", base_url, new_base)
+
+        ssl_ctx = self.ssl_context(True, srv)
+        async with httpx.AsyncClient(base_url = new_base,
+                                     headers = headers,
+                                     verify = ssl_ctx) as client:
             yield client
 
     def serve(self,
