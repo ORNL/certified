@@ -27,6 +27,7 @@ nav:
     - "Call an mTLS API": howto/api-client.md
     - "Run an mTLS server": howto/api-server.md
     - "Rich JSON logging": howto/logging.md
+    - "Integrate with A2A": howto/a2a.md
   - Concept Guide:
     - concepts/index.md
     - "Key Management": concepts/keys.md
