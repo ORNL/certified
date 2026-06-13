@@ -20,6 +20,8 @@ from .encode import (
     append_pseudonym,
     rfc4514name,
     get_is_ca,
+    cert_key_to_biscuit_alg,
+    cert_pubkey_to_biscuit_bytes,
 )
 from .ca import CA, LeafCert
 from .wrappers import ssl_context, configure_capath
@@ -232,12 +234,17 @@ class Certified:
             raise FileExistsError(fname)
         fname.write_text(cert_to_pem(signed_cert))
 
-    def lookup_public_key(self, kid : int) -> bis.PublicKey:
+    def lookup_public_key(self, kid: int) -> bis.PublicKey:
         # FIXME: use key serial numbers
-        pubkey = self.signer().pubkey.public_bytes_raw()
-        #if kid is None:
-        #    return bis.PublicKey.from_bytes( pubkey )
-        return bis.PublicKey.from_bytes( pubkey, alg=bis.Algorithm.Ed25519 ) # type: ignore
+        pub = self.signer().pubkey
+        alg = cert_key_to_biscuit_alg(pub)
+        raw = cert_pubkey_to_biscuit_bytes(pub)
+        if alg is None or raw is None:
+            raise TypeError(
+                f"Key type {type(pub).__name__} is not supported "
+                "for biscuit verification (supported: ed25519, secp256r1)"
+            )
+        return bis.PublicKey.from_bytes(raw, alg=alg)  # type: ignore
 
     #def biscuit(self, token : str) -> bis.Biscuit:
     #    return bis.Biscuit.from_base64(token, self.lookup_public_key)

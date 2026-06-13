@@ -103,3 +103,21 @@ check if operation($op), ["POST", "PUT", "PATCH"].contains($op);
 ```
 
 For more, see the [BiscuitSec Attenuation Docs](https://doc.biscuitsec.org/recipes/per-request-attenuation).
+
+## Key algorithm support matrix
+
+`certified` can issue x509 certificates with several key types, but
+`biscuit_auth` only supports a subset for signing and verifying tokens.
+Choose your CA key type accordingly if you need biscuit operations.
+
+| Key type | x509 cert | Biscuit signing | Notes |
+|---|---|---|---|
+| `ed25519` | ✅ | ✅ | Default; recommended |
+| `secp256r1` (P-256) | ✅ | ✅ | NIST P-256 |
+| `ed448` | ✅ | ❌ | No `biscuit_auth` support |
+| `secp384r1` (P-384) | ✅ | ❌ | No `biscuit_auth` support |
+| `secp521r1` (P-521) | ✅ | ❌ | No `biscuit_auth` support |
+| `secp256k1` | ✅ | ❌ | No `biscuit_auth` support |
+
+Calling `sign_biscuit()` or `lookup_public_key()` on a CA whose key type
+is not biscuit-compatible raises `TypeError` at runtime.
