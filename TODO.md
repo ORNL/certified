@@ -4,25 +4,6 @@ Cross-reference of code issues found during docs audit and open roadmap items.
 
 ---
 
-## Bugs (found during docs audit)
-
-- **`encode.py:311`** — stray `print(n)` debug statement inside `get_urls()`. Remove before release.
-
-- **`layout.py:67`** — `CRTDir.__getitem__` uses bare `name + ".crt"` instead of
-  `self.base / (name + ".crt")`, so the returned path is always relative to CWD rather
-  than the configured directory.
-
-- **`layout.py:97-112`** — `check_config`: the inner `gone()` helper calls `error()`
-  multiple times then returns `(warnings, errors)` that callers never use; execution
-  continues past a detected error. The `notexist()` helper at line 114 is dead code and
-  references `p` before assignment.
-
-- **`encode.py:329-331`** — unreachable code after `raise` in `get_aki()`:
-  the `return x509.AuthorityKeyIdentifier.from_issuer_public_key(...)` after `raise` is
-  never executed but the comment above it suggests it was intentional.
-
----
-
 ## Code TODOs / incomplete features
 
 - **`cert.py:237`** — `lookup_public_key()` FIXME: ignores `kid` and always returns the
@@ -48,16 +29,6 @@ Cross-reference of code issues found during docs audit and open roadmap items.
 - **`ca.py:126-155`** — docstring example for `sign_biscuit` is not valid Python: missing
   imports for `BiscuitBuilder`, `datetime`, `timezone`, `timedelta`. Fix or replace with a
   pointer to `tests/test_biscuit_bridge.py`.
-
----
-
-## Minor / style
-
-- **`certified.py:456`** — dead `asyncio.run()` call commented out just above the sync
-  wrapper that internally calls `asyncio.run(server.serve())`. Remove the dead line.
-
-- **`certified.py:401`** — commented-out `grant` command block references `actor_api`
-  which is not a dependency. Delete or open a tracked issue.
 
 ---
 

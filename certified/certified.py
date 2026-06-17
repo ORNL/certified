@@ -26,11 +26,6 @@ from .serial import cert_to_b64, b64_to_cert, cert_to_pem
 
 from cryptography import x509
 
-#from actor_api.grant import Grant
-#from actor_api.validation import signGrant, validateGrant
-#from actor_api.crypto import gen_key, gen_keypair, get_verifykey, get_pubkey
-#from actor_api.actor_test import cli_srv, srv_sign
-
 app = typer.Typer()
 
 
@@ -459,7 +454,6 @@ def serve(app : Annotated[
 
     cert = Certified(config)
     _logger.info("Running %s %s", __name__, app)
-    #asyncio.run( cert.serve(app, url, loki) )
     cert.serve(app, url, loki)
     _logger.info("Exited %s", app)
     return 0
