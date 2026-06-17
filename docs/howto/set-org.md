@@ -10,10 +10,14 @@ organization's signed certificate and updates trust roots accordingly.
     yourself.  Make sure you have a backup if you might need to revert.
 
     Removed:
-    - `certified/CA.key`, `certified/CA.crt`
-    - `certified/id/` (cross-signed identities)
-    - `certified/CA/` (CA cross-signatures)
-    - `certified/known_servers/self.crt`, `certified/known_clients/self.crt`
+
+     - `certified/CA.key`, `certified/CA.crt`
+
+     - `certified/id/` (cross-signed identities)
+
+     - `certified/CA/` (CA cross-signatures)
+
+     - `certified/known_servers/self.crt`, `certified/known_clients/self.crt`
 
 ## Prerequisites
 

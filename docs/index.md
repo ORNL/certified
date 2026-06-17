@@ -9,7 +9,7 @@ and consists of four separate parts:
 
 1. [Installation and CLI](cli.md)
 
-1. [Tutorials](tutorials.md)
+1. [Tutorials](tutorials/index.md)
 
 2. [How-To Guides](howto/index.md)
 

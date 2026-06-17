@@ -3,6 +3,9 @@ site_name: Certified API docs
 theme:
     name: "material"
 
+markdown_extensions:
+  - admonition
+
 plugins:
   - mkdocstrings
 
@@ -15,7 +18,11 @@ exclude_docs: |
 nav:
   - Home: index.md
   - Install: cli.md
-  - Tutorials: tutorials.md
+  - Tutorials:
+    - tutorials/index.md
+    - "Setting up an identity": tutorials/setup.md
+    - "Connecting with another organization": tutorials/connecting.md
+    - "Serving an API over mTLS": tutorials/serving.md
   - How-To Guides:
     - howto/index.md
     - "Create an identity": howto/init.md
