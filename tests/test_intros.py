@@ -22,6 +22,11 @@ from certified.serial import cert_to_b64, pem_to_cert, b64_to_cert
 runner = CliRunner()
 
 def run_echo(srv : Path, port : int) -> None:
+    import sys, os
+    # Add the project root to sys.path so 'examples' is importable
+    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    if project_root not in sys.path:
+        sys.path.insert(0, project_root)
     runner.invoke(app, ["serve", "examples.echo:app",
                           f"https://127.0.0.1:{port}",
                           "--config", str(srv)
@@ -51,14 +56,18 @@ def can_connect(cli : Path, srv : Path, host : str, port : int) -> bool:
             if result.exit_code == 0:
                 connected = True
                 break
-            # This error indicates SSL handshake failed.
-            if isinstance(result.exception, aiohttp.ClientSSLError):
-                print("RemoteProtocolError =====================")
-                print(result.exception)
-                break
-            elif isinstance(result.exception, SystemExit):
-                #print("SystemExit=====================")
-                #print(result.exception)
+            # message.py catches all aiohttp errors and calls sys.exit(1),
+            # so result.exception is always SystemExit — inspect output instead.
+            if isinstance(result.exception, SystemExit):
+                out = result.output
+                if "Connect call failed" in out or \
+                   "Connection refused" in out or \
+                   "Temporary failure in name resolution" in out or \
+                   "Request timed out" in out:
+                    # server not yet ready
+                    continue
+                print("Connection failed =====================")
+                print(out)
                 break
             elif isinstance(result.exception, TimeoutError):
                 continue
@@ -71,7 +80,7 @@ def can_connect(cli : Path, srv : Path, host : str, port : int) -> bool:
                 elif "CERTIFICATE_VERIFY_FAILED" in str(result.exception):
                     break
                 raise ValueError(result.exception)
-            else:
+            elif result.exception is not None:
                 raise ValueError(result.exception)
         else:
             assert False, f"Failed to connect to server {url}: {result.exception}"
