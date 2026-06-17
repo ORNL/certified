@@ -22,6 +22,7 @@ from .encode import (
     get_is_ca,
     cert_key_to_biscuit_alg,
     cert_pubkey_to_biscuit_bytes,
+    KeyType,
 )
 from .ca import CA, LeafCert
 from .wrappers import ssl_context, configure_capath
@@ -254,6 +255,7 @@ class Certified:
             name : x509.Name,
             san : x509.SubjectAlternativeName,
             certified_config : Optional[Pstr] = None,
+            key_type : KeyType = KeyType.ed25519,
             overwrite : bool = False,
            ) -> "Certified":
         """ Create a new CA and identity certificate
@@ -264,8 +266,8 @@ class Certified:
           certified_config: base directory to output the new identity
           overwrite: if True, any existing files will be deleted first
         """
-        ca    = CA.new(append_pseudonym(name, "Signing Certificate"))
-        ident = ca.leaf_cert(name, san)
+        ca    = CA.new(append_pseudonym(name, "Signing Certificate"), key_type=key_type)
+        ident = ca.leaf_cert(name, san, key_type=key_type)
 
         cfg = layout.config(certified_config, False)
         if overwrite: # remove existing config!

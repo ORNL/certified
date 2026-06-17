@@ -69,8 +69,8 @@ def test_ca() -> None:
     name = encode.org_name("My Company", "My Division")
     name2 = encode.org_name("My Company", "Other Division")
     san = encode.SAN(hosts=["example.com"])
-    crt = CA.new(name, san, key_type="secp256r1")
-    ee = crt.leaf_cert(name2, san, key_type="secp256r1")
+    crt = CA.new(name, san, key_type=encode.KeyType.secp256r1)
+    ee = crt.leaf_cert(name2, san, key_type=encode.KeyType.secp256r1)
 
     n = verify.by_chain("example.com", [ee.certificate, crt.certificate])
     assert n == 2

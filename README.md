@@ -137,20 +137,23 @@ Documentation was built using [this guide](https://realpython.com/python-project
 
 * v1.2.0
 
-  - [ ] CI and better test coverage
+  - [x] CI and better test coverage
 
-  - [ ] better documentation for known\_services
-        and interface for showing configuration contents
+  - [x] better documentation, esp. for known\_services
+
+  - [x] support for `--key_type secp256r1`
 
 * v1.2.1
 
+  - [ ] interface for showing configuration contents
+
   - [ ] throw warning if id.crt does not contain the server's
-    hostname in SAN (since this will usually result in a connection error
-    from SSL)
+        hostname in SAN (since this will usually result in a connection error
+        from SSL)
 
 * v 1.3.0
 
-  - [ ] Better documentation and more helpful error messages
+  - [ ] more helpful error messages
 
   - [ ] Demo presentations and lessons learned
 

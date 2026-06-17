@@ -29,7 +29,7 @@ import biscuit_auth as bis
 
 from .blob import *
 
-__all__ = ["SAN", "name", "PrivIface", "hash_for_pubkey",
+__all__ = ["KeyType", "SAN", "name", "PrivIface", "hash_for_pubkey",
            "cert_builder_common", "get_aki",
            "CertificateIssuerPrivateKeyTypes",
            "CertificatePublicKeyTypes",
@@ -40,23 +40,31 @@ __all__ = ["SAN", "name", "PrivIface", "hash_for_pubkey",
            "cert_pubkey_to_biscuit_bytes",
           ]
 
+class KeyType(str, Enum):
+    ed25519   = "ed25519"
+    ed448     = "ed448"
+    secp256r1 = "secp256r1"
+    secp384r1 = "secp384r1"
+    secp521r1 = "secp521r1"
+    secp256k1 = "secp256k1"
+
 class PrivIface:
-    def __init__(self, keytype : str) -> None:
+    def __init__(self, keytype: KeyType) -> None:
         self.ed : Optional[type[Union[
             ed25519.Ed25519PrivateKey,ed448.Ed448PrivateKey
                 ]]] = None
         self.ec : Optional[ Any ] = None
-        if keytype == "ed25519":
+        if keytype == KeyType.ed25519:
             self.ed = ed25519.Ed25519PrivateKey
-        elif keytype == "ed448":
+        elif keytype == KeyType.ed448:
             self.ed = ed448.Ed448PrivateKey
-        elif keytype == "secp256r1":
+        elif keytype == KeyType.secp256r1:
             self.ec = ec.SECP256R1
-        elif keytype == "secp384r1":
+        elif keytype == KeyType.secp384r1:
             self.ec = ec.SECP384R1
-        elif keytype == "secp521r1":
+        elif keytype == KeyType.secp521r1:
             self.ec = ec.SECP521R1
-        elif keytype == "secp256k1":
+        elif keytype == KeyType.secp256k1:
             self.ec = ec.SECP256K1
         else:
             raise KeyError(keytype)

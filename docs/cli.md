@@ -53,46 +53,48 @@ Either a person name (positional argument) or `--org` + `--unit` must be
 provided, along with at least one of `--host`, `--email`, or `--uri`.
 
 ```
- Usage: certified init [OPTIONS] [NAME]
-
- Create a new signing and end-entity ID.
-
-╭─ Person Name ────────────────────────────────────────────────────────────────╮
-│   name      [NAME]  Note, name parsing into given and surnames and           │
-│                     generations, etc. is not supported.                      │
-│                     Examples:     - Timothy T. Tester                        │
-╰──────────────────────────────────────────────────────────────────────────────╯
-╭─ Options ────────────────────────────────────────────────────────────────────╮
-│ --uid                            TEXT  System user name                      │
-│ --domain                         TEXT  Domain components (.-separated)       │
-│ --country                        TEXT                                        │
-│ --state                          TEXT                                        │
-│ --city                           TEXT                                        │
-│ --overwrite    --no-overwrite          Overwrite existing config.            │
-│                                        [default: no-overwrite]               │
-│ --config                         PATH  Config file path [default             │
-│                                        $VIRTUAL_ENV/etc/certified].          │
-│ --help                                 Show this message and exit.           │
-╰──────────────────────────────────────────────────────────────────────────────╯
-╭─ Organization Name ──────────────────────────────────────────────────────────╮
-│ --org        TEXT  If specified, unit must also be present and name cannot   │
-│                    be present. Example: 'Certificate Lab, Inc.'"             │
-╰──────────────────────────────────────────────────────────────────────────────╯
-╭─ Organization Unit ──────────────────────────────────────────────────────────╮
-│ --unit        TEXT  If specified, org must also be present and name cannot   │
-│                     be present. Example: 'Computing Directorate'             │
-╰──────────────────────────────────────────────────────────────────────────────╯
-╭─ Example: example@example.org ───────────────────────────────────────────────╮
-│ --email        TEXT  email addresses                                         │
-╰──────────────────────────────────────────────────────────────────────────────╯
-╭─ host names ─────────────────────────────────────────────────────────────────╮
-│ --host        TEXT  Examples: - "*.example.org" - "example.org" -            │
-│                     "éxamplë.org" - "xn--xampl-9rat.org" - "127.0.0.1" -     │
-│                     "::1" - "10.0.0.0/8" - "2001::/16"                       │
-╰──────────────────────────────────────────────────────────────────────────────╯
-╭─ uniform resource identifiers ───────────────────────────────────────────────╮
-│ --uri        TEXT  Example: https://datatracker.ietf.org/…                  │
-╰──────────────────────────────────────────────────────────────────────────────╯
+ Usage: certified init [OPTIONS] [NAME]                                                           
+                                                                                                  
+ Create a new signing and end-entity ID.                                                          
+                                                                                                  
+╭─ Person Name ──────────────────────────────────────────────────────────────────────────────────╮
+│   name      [NAME]  Note, name parsing into given and surnames and generations, etc. is not    │
+│                     supported.                                                                 │
+│                     Examples:     - Timothy T. Tester                                          │
+╰────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ──────────────────────────────────────────────────────────────────────────────────────╮
+│ --uid                            TEXT                           System user name               │
+│ --domain                         TEXT                           Domain components              │
+│                                                                 (.-separated)                  │
+│ --country                        TEXT                                                          │
+│ --state                          TEXT                                                          │
+│ --city                           TEXT                                                          │
+│ --key-type                       [ed25519|ed448|secp256r1|secp  [default: ed25519]             │
+│                                  384r1|secp521r1|secp256k1]                                    │
+│ --overwrite    --no-overwrite                                   Overwrite existing config.     │
+│                                                                 [default: no-overwrite]        │
+│ --config                         PATH                           Config file path [default      │
+│                                                                 $VIRTUAL_ENV/etc/certified].   │
+│ --help                                                          Show this message and exit.    │
+╰────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Organization Name ────────────────────────────────────────────────────────────────────────────╮
+│ --org        TEXT  If specified, unit must also be present and name cannot be present.         │
+│                    Example: 'Certificate Lab, Inc.'"                                           │
+╰────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Organization Unit ────────────────────────────────────────────────────────────────────────────╮
+│ --unit        TEXT  If specified, org must also be present and name cannot be present.         │
+│                     Example: 'Computing Directorate'                                           │
+╰────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Example: example@example.org ─────────────────────────────────────────────────────────────────╮
+│ --email        TEXT  email addresses                                                           │
+╰────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ host names ───────────────────────────────────────────────────────────────────────────────────╮
+│ --host        TEXT  Examples: - "*.example.org" - "example.org" - "éxamplë.org" -              │
+│                     "xn--xampl-9rat.org" - "127.0.0.1" - "::1" - "10.0.0.0/8" - "2001::/16"    │
+╰────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ uniform resource identifiers ─────────────────────────────────────────────────────────────────╮
+│ --uri        TEXT  Example: https://datatracker.ietf.org/doc/html/rfc3986#section-1.1.2        │
+╰────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
 #### `certified serve`

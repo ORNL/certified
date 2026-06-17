@@ -99,6 +99,7 @@ Example: 'Computing Directorate'
          email: Email = [],
          host: Hostname = [],
          uri: URI = [],
+         key_type: encode.KeyType = encode.KeyType.ed25519,
          overwrite: Annotated[bool, typer.Option(
                         help="Overwrite existing config.")
                     ] = False,
@@ -129,7 +130,7 @@ Example: 'Computing Directorate'
     else:
         raise ValueError("Host, Email, or URI must also be provided.")
 
-    cert = Certified.new(xname, san, config, overwrite)
+    cert = Certified.new(xname, san, config, key_type, overwrite)
     print(f"Generated new config for {encode.rfc4514name(xname)} at {cert.config}.")
     return 0
 

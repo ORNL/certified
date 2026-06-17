@@ -46,6 +46,7 @@ from .encode import (
     cert_builder_common,
     cert_key_to_biscuit_alg,
     cert_privkey_to_biscuit_bytes,
+    KeyType,
 )
 from .serial import cert_to_pem
 from .cert_info import CertInfo
@@ -166,7 +167,7 @@ class CA(FullCert):
         name : x509.Name,
         san  : Optional[x509.SubjectAlternativeName] = None,
         path_length: int = 0,
-        key_type : str = "ed25519",
+        key_type: KeyType = KeyType.ed25519,
         parent_cert: Optional["CA"] = None,
     ) -> "CA":
         """ Generate a new CA (root if parent_cert is None)
@@ -205,7 +206,7 @@ class CA(FullCert):
         san: x509.SubjectAlternativeName,
         not_before: Optional[datetime.datetime] = None,
         not_after: Optional[datetime.datetime] = None,
-        key_type: str = "ed25519"
+        key_type: KeyType = KeyType.ed25519
     ) -> "LeafCert":
         """Issues a certificate. The certificate can be used for either
         servers or clients.
