@@ -10,7 +10,7 @@ check: ## Run code quality tools.
 	@echo "🚀 Checking lock file consistency with 'pyproject.toml'"
 	uv lock --locked
 	@echo "🚀 Static type checking: Running mypy"
-	uv run mypy .
+	uv run mypy certified tests
 
 .PHONY: test
 test: ## Test the code with pytest

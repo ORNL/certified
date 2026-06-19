@@ -19,18 +19,19 @@ from certified.encode import (
     cert_key_to_biscuit_alg,
     cert_privkey_to_biscuit_bytes,
     cert_pubkey_to_biscuit_bytes,
+    KeyType,
 )
 import biscuit_auth as bis
 
 # ── parametrize ───────────────────────────────────────────────────────────────
 
-SUPPORTED = ["ed25519", "secp256r1"]
-UNSUPPORTED = ["ed448", "secp384r1", "secp521r1", "secp256k1"]
+SUPPORTED = [KeyType.ed25519, KeyType.secp256r1]
+UNSUPPORTED = [KeyType.ed448, KeyType.secp384r1, KeyType.secp521r1, KeyType.secp256k1]
 
 
 # ── helpers ───────────────────────────────────────────────────────────────────
 
-def make_ca(key_type: str) -> CA:
+def make_ca(key_type: KeyType) -> CA:
     name = encode.org_name("Test Org", "Testing", pseudonym="Signing Certificate")
     return CA.new(name, key_type=key_type)
 
@@ -71,22 +72,18 @@ def sign_and_verify(ca: CA) -> None:
 # ── tests ─────────────────────────────────────────────────────────────────────
 
 @pytest.mark.parametrize("key_type", [
-    pytest.param("ed25519",   id="ed25519"),
-    pytest.param("secp256r1", id="secp256r1-P256"),
+    pytest.param(k,   id=k.value) for k in SUPPORTED
 ])
-def test_x509_to_biscuit(key_type: str) -> None:
+def test_x509_to_biscuit(key_type: KeyType) -> None:
     """Full x509 CA → biscuit sign → biscuit verify round-trip."""
     ca = make_ca(key_type)
     sign_and_verify(ca)
 
 
 @pytest.mark.parametrize("key_type", [
-    pytest.param("ed448",     id="ed448"),
-    pytest.param("secp384r1", id="secp384r1-P384"),
-    pytest.param("secp521r1", id="secp521r1-P521"),
-    pytest.param("secp256k1", id="secp256k1"),
+    pytest.param(k,   id=k.value) for k in UNSUPPORTED
 ])
-def test_unsupported_returns_none(key_type: str) -> None:
+def test_unsupported_returns_none(key_type: KeyType) -> None:
     """Translation functions return None for key types biscuit_auth doesn't support."""
     ca = make_ca(key_type)
     assert cert_key_to_biscuit_alg(ca._private_key) is None
