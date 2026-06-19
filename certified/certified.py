@@ -26,11 +26,6 @@ from .serial import cert_to_b64, b64_to_cert, cert_to_pem
 
 from cryptography import x509
 
-#from actor_api.grant import Grant
-#from actor_api.validation import signGrant, validateGrant
-#from actor_api.crypto import gen_key, gen_keypair, get_verifykey, get_pubkey
-#from actor_api.actor_test import cli_srv, srv_sign
-
 app = typer.Typer()
 
 
@@ -104,6 +99,7 @@ Example: 'Computing Directorate'
          email: Email = [],
          host: Hostname = [],
          uri: URI = [],
+         key_type: encode.KeyType = encode.KeyType.ed25519,
          overwrite: Annotated[bool, typer.Option(
                         help="Overwrite existing config.")
                     ] = False,
@@ -134,7 +130,7 @@ Example: 'Computing Directorate'
     else:
         raise ValueError("Host, Email, or URI must also be provided.")
 
-    cert = Certified.new(xname, san, config, overwrite)
+    cert = Certified.new(xname, san, config, key_type, overwrite)
     print(f"Generated new config for {encode.rfc4514name(xname)} at {cert.config}.")
     return 0
 
@@ -147,10 +143,6 @@ def add_client(name : Annotated[
                         Path,
                         typer.Argument(help="Client's certificate (PEM or b64-DER).")
                     ],
-               scopes : Annotated[
-                        str,
-                        typer.Argument(help="Whitespace-separated list of allowed scopes.")
-                    ] = "",
                overwrite: Annotated[bool, typer.Option(
                         help="Overwrite existing client.")
                     ] = False,
@@ -172,7 +164,7 @@ def add_client(name : Annotated[
     #assert encode.get_is_ca(c), "TLS doesn't allow trusting end-identies directly [sic]."
     # TODO: check for ideas at https://hg.python.org/cpython/rev/2afe5413d7af
 
-    cert.add_client(name, c, scopes.split(), overwrite)
+    cert.add_client(name, c, overwrite)
 
     return 0
 
@@ -194,7 +186,25 @@ def add_service(name : Annotated[
                     ] = False,
                config : Config = None) -> int:
     """
-    Add the service directly to your `known_servers` list.
+    Add a service directly to your `known_servers` list.
+
+    The certificate argument may be:
+
+    - A PEM file (e.g. the server's CA cert exported via `certified get-signer`)
+    - A base64-DER string
+    - A JSON file containing a `ca_cert` field (the format produced by
+      `certified get-signer` or `certified introduce`)
+
+    The `--auth` option accepts the RFC 4514 distinguished-name string of a
+    signing authority whose signatures this client should present when
+    connecting to the service.  This string is automatically extracted from
+    the certificate and appended, so you only need `--auth` when the server
+    also accepts signatures from *additional* CAs beyond the one in `crt`.
+
+    Prefer the `introduce` / `add-intro` workflow for initial setup: the JSON
+    response from `introduce` already contains the correct `ca_cert` and
+    optional `services` dict, so `add-intro` fills in all auth names and
+    known-server entries without any manual RFC 4514 string handling.
     """
 
     cert = Certified(config)
@@ -229,26 +239,29 @@ def introduce(crt: Annotated[
                    ],
               config: Config = None) -> int:
     """
-    Write an introduction for the subject named by the
-    certificate above.  Do not use this function unless
-    you have checked both of the following:
+    Sign the subject's certificate and print a JSON introduction to stdout.
 
-    1. The certificate is actually held by the subject and
-       not someone else pretending to be the subject.
+    The JSON response contains two fields:
 
-    2. The subject will maintain the secrecy of their
-       private key, and not copy it anywhere.
+    - `signed_cert` — the subject's identity certificate, signed by your CA
+    - `ca_cert`     — your CA certificate, so the subject can verify your
+                      signature and present the correct chain to your services
 
-    If either of those are false, your introductions are no
-    longer trustworthy, and you'll need to create a new
-    identity!
+    Optionally, the response may also include a `services` dict mapping
+    service alias names to URLs; if present, `add-intro` will create
+    `known_servers/` entries for each service automatically, using your CA
+    cert and the correct RFC 4514 auth name — no manual string handling needed.
 
-    To use this introduction, the subject will need to run
-    `certified add-intro`.  That command will place
-    your response in their config. as `id/<your_name>.crt`
-    or `CA/<your_name>.crt` (depending on which certificate
-    was signed), as well as listing <your_name>
-    within one of their `known_server/<server_name>.yaml` files.
+    Do not use this function unless you have verified both of the following:
+
+    1. The certificate is actually held by the subject (not an impostor).
+    2. The subject will keep their private key secret.
+
+    If either condition fails, your introductions are no longer trustworthy
+    and you will need to rotate your CA identity.
+
+    The subject runs `certified add-intro <response.json>` to install the
+    signed cert and any service definitions in one step.
     """
 
     cert = Certified(config)
@@ -281,8 +294,24 @@ def add_intro(signature : Annotated[
                         help="Overwrite existing authorization?")
                     ] = False,
                config : Config = None) -> int:
-    """ Add an introduction to use when authenticating
-    to servers that trust this signer.
+    """
+    Install an introduction produced by a remote `certified introduce` call.
+
+    Reads the JSON file and performs two actions automatically:
+
+    1. Saves the signed identity certificate to `id/<signer-name>.crt` as a
+       PEM chain, where `<signer-name>` is derived from the CA cert's subject
+       using RFC 4514 format.  You do not need to know or type this string —
+       it is computed from the `ca_cert` field in the JSON.
+
+    2. If the JSON contains a `services` dict, creates a
+       `known_servers/<alias>.yaml` entry for each service, pre-populated
+       with the correct CA certificate and auth name.  This means a single
+       `add-intro` call can simultaneously install your cross-org identity
+       and configure all the service endpoints the signer wants you to reach.
+
+    This workflow eliminates the manual RFC 4514 string handling that would
+    otherwise be required when using `add-service` directly.
     """
     with open(signature) as f:
         data = json.load(f)
@@ -398,33 +427,6 @@ def get_signer(config : Config = None) -> int:
     print(s)
     return 0
 
-"""
-@app.command()
-def grant(entity : str = typer.Argument(..., help="Grantee's name."),
-          pubkey : str = typer.Argument(..., help="Grantee's pubkey to sign"),
-          scopes : str = typer.Argument("", help="Whitespace-separated list of scopes to grant."),
-          hours  : float = typer.Option(10.0, help="Hours until expiration."),
-          config : Optional[Path] = typer.Option(None, help="Config file path [default ~/.config/actors.json].")):
-    # Sign a biscuit and print it to stdout.
-    config = cfgfile(config)
-    cfg = Config.model_validate_json(open(config).read())
-    #print(f"Granting actor {entity} pubkey {pubkey} and {scopes}")
-
-    lifetime = timedelta(hours=hours)
-
-    pubkey = PubKey(pubkey) # validate the pubkey's format
-    grant = Grant( grantor = cfg.name
-                 , entity = entity
-                 , attr = {'scopes': scopes,
-                           'pubkey': str(pubkey)
-                          }
-                 , expiration = datetime.now().astimezone()  + lifetime
-                 )
-    sgrant = signGrant(grant, cfg.privkey)
-    s = json.dumps({"grants": {cfg.name: to_jsonable_python(sgrant)}}, indent=4)
-    print(s)
-"""
-
 @app.command()
 def serve(app : Annotated[
                   str,
@@ -453,7 +455,6 @@ def serve(app : Annotated[
 
     cert = Certified(config)
     _logger.info("Running %s %s", __name__, app)
-    #asyncio.run( cert.serve(app, url, loki) )
     cert.serve(app, url, loki)
     _logger.info("Exited %s", app)
     return 0

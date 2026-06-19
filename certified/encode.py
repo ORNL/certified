@@ -8,7 +8,7 @@ import ipaddress
 import idna
 
 from cryptography.hazmat.primitives.asymmetric import (
-    ed448, 
+    ed448,
     ed25519,
     ec
 )
@@ -23,35 +23,48 @@ from cryptography.hazmat.primitives.serialization import (
     Encoding,
     NoEncryption,
     PrivateFormat,
+    PublicFormat,
 )
+import biscuit_auth as bis
 
 from .blob import *
 
-__all__ = ["SAN", "name", "PrivIface", "hash_for_pubkey",
+__all__ = ["KeyType", "SAN", "name", "PrivIface", "hash_for_pubkey",
            "cert_builder_common", "get_aki",
            "CertificateIssuerPrivateKeyTypes",
            "CertificatePublicKeyTypes",
            "append_pseudonym", "get_urls", "rfc4514name",
-           "get_path_length", "get_is_ca"
+           "get_path_length", "get_is_ca",
+           "cert_key_to_biscuit_alg",
+           "cert_privkey_to_biscuit_bytes",
+           "cert_pubkey_to_biscuit_bytes",
           ]
 
+class KeyType(str, Enum):
+    ed25519   = "ed25519"
+    ed448     = "ed448"
+    secp256r1 = "secp256r1"
+    secp384r1 = "secp384r1"
+    secp521r1 = "secp521r1"
+    secp256k1 = "secp256k1"
+
 class PrivIface:
-    def __init__(self, keytype : str) -> None:
+    def __init__(self, keytype: KeyType) -> None:
         self.ed : Optional[type[Union[
             ed25519.Ed25519PrivateKey,ed448.Ed448PrivateKey
                 ]]] = None
         self.ec : Optional[ Any ] = None
-        if keytype == "ed25519":
+        if keytype == KeyType.ed25519:
             self.ed = ed25519.Ed25519PrivateKey
-        elif keytype == "ed448":
+        elif keytype == KeyType.ed448:
             self.ed = ed448.Ed448PrivateKey
-        elif keytype == "secp256r1":
+        elif keytype == KeyType.secp256r1:
             self.ec = ec.SECP256R1
-        elif keytype == "secp384r1":
+        elif keytype == KeyType.secp384r1:
             self.ec = ec.SECP384R1
-        elif keytype == "secp521r1":
+        elif keytype == KeyType.secp521r1:
             self.ec = ec.SECP521R1
-        elif keytype == "secp256k1":
+        elif keytype == KeyType.secp256k1:
             self.ec = ec.SECP256K1
         else:
             raise KeyError(keytype)
@@ -78,6 +91,62 @@ def hash_for_pubkey(pkey : CertificatePublicKeyTypes
     if isinstance(pkey, (ed25519.Ed25519PublicKey, ed448.Ed448PublicKey)):
         return None
     return hashes.SHA256()
+
+# Biscuit interoperability
+# Only ed25519 and secp256r1 are supported by biscuit_auth.
+# ed448, secp384r1, secp521r1, secp256k1 have no Algorithm enum value.
+
+def cert_key_to_biscuit_alg(
+    key: Union[CertificateIssuerPrivateKeyTypes, CertificatePublicKeyTypes]
+) -> Optional[bis.Algorithm]:  # type: ignore[name-defined]
+    """Return the biscuit Algorithm for a cryptography key, or None if unsupported.
+
+    Supported:  ed25519 → Algorithm.Ed25519
+                secp256r1 (P-256) → Algorithm.Secp256r1
+    Unsupported: ed448, secp384r1, secp521r1, secp256k1 → None
+    """
+    if isinstance(key, (ed25519.Ed25519PrivateKey, ed25519.Ed25519PublicKey)):
+        return bis.Algorithm.Ed25519  # type: ignore[attr-defined]
+    if isinstance(key, ec.EllipticCurvePrivateKey) and isinstance(key.curve, ec.SECP256R1):
+        return bis.Algorithm.Secp256r1  # type: ignore[attr-defined]
+    if isinstance(key, ec.EllipticCurvePublicKey) and isinstance(key.curve, ec.SECP256R1):
+        return bis.Algorithm.Secp256r1  # type: ignore[attr-defined]
+    return None
+
+def cert_privkey_to_biscuit_bytes(
+    key: CertificateIssuerPrivateKeyTypes,
+) -> Optional[bytes]:
+    """Serialise a cryptography private key to the raw bytes biscuit_auth expects.
+
+    Returns None for unsupported key types.
+
+    Formats:
+      ed25519   — 32-byte raw scalar via private_bytes_raw()
+      secp256r1 — 32-byte big-endian private scalar
+                  (biscuit does not accept DER/PEM/PKCS8 for EC keys)
+    """
+    if isinstance(key, ed25519.Ed25519PrivateKey):
+        return key.private_bytes_raw()
+    if isinstance(key, ec.EllipticCurvePrivateKey) and isinstance(key.curve, ec.SECP256R1):
+        return key.private_numbers().private_value.to_bytes(32, "big")
+    return None
+
+def cert_pubkey_to_biscuit_bytes(
+    key: CertificatePublicKeyTypes,
+) -> Optional[bytes]:
+    """Serialise a cryptography public key to the raw bytes biscuit_auth expects.
+
+    Returns None for unsupported key types.
+
+    Formats:
+      ed25519   — 32-byte raw key via public_bytes_raw()
+      secp256r1 — 33-byte X9.62 compressed point
+    """
+    if isinstance(key, ed25519.Ed25519PublicKey):
+        return key.public_bytes_raw()
+    if isinstance(key, ec.EllipticCurvePublicKey) and isinstance(key.curve, ec.SECP256R1):
+        return key.public_bytes(Encoding.X962, PublicFormat.CompressedPoint)
+    return None
 
 Location = Tuple[Optional[str],Optional[str],Optional[str]]
 
@@ -307,7 +376,6 @@ def get_urls(cert : x509.Certificate) -> List[str]:
 
     urls = []
     for n in san.value:
-        print(n)
         if isinstance(n, x509.DNSName):
             urls.append(n.value)
         elif isinstance(n, x509.IPAddress):

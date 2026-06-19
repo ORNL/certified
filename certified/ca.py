@@ -42,7 +42,12 @@ from .cert_base import FullCert
 
 from .blob import PublicBlob, PrivateBlob, Blob, PWCallback
 import certified.encode as encode
-from .encode import cert_builder_common
+from .encode import (
+    cert_builder_common,
+    cert_key_to_biscuit_alg,
+    cert_privkey_to_biscuit_bytes,
+    KeyType,
+)
 from .serial import cert_to_pem
 from .cert_info import CertInfo
 
@@ -146,20 +151,23 @@ class CA(FullCert):
         >>>     }
         >>> ))
         """
-        assert isinstance(self._private_key, ed25519.Ed25519PrivateKey)
+        alg = cert_key_to_biscuit_alg(self._private_key)
+        raw = cert_privkey_to_biscuit_bytes(self._private_key)
+        if alg is None or raw is None:
+            raise TypeError(
+                f"Key type {type(self._private_key).__name__} is not supported "
+                "for biscuit signing (supported: ed25519, secp256r1)"
+            )
         return builder.build(
-                bis.PrivateKey.from_bytes( # type: ignore[call-arg]
-                        self._private_key
-                            .private_bytes_raw(),
-                            alg = bis.Algorithm.Ed25519, # type: ignore[attr-defined]
-        ) )
+            bis.PrivateKey.from_bytes(raw, alg=alg)  # type: ignore[call-arg]
+        )
 
     @classmethod
     def new(cls,
         name : x509.Name,
         san  : Optional[x509.SubjectAlternativeName] = None,
         path_length: int = 0,
-        key_type : str = "ed25519",
+        key_type: KeyType = KeyType.ed25519,
         parent_cert: Optional["CA"] = None,
     ) -> "CA":
         """ Generate a new CA (root if parent_cert is None)
@@ -198,7 +206,7 @@ class CA(FullCert):
         san: x509.SubjectAlternativeName,
         not_before: Optional[datetime.datetime] = None,
         not_after: Optional[datetime.datetime] = None,
-        key_type: str = "ed25519"
+        key_type: KeyType = KeyType.ed25519
     ) -> "LeafCert":
         """Issues a certificate. The certificate can be used for either
         servers or clients.

@@ -1,29 +1,24 @@
 from typing import List, Optional
-from pydantic import BaseModel, SecretStr
+from pydantic import BaseModel, ConfigDict, SecretStr
 
 class TrustedClient(BaseModel):
-    """
-    Defines a known client.
+    """Defines a known client."""
+    model_config = ConfigDict(extra='ignore')
 
-    TLS certificates don't carry scopes, so we can't
-    really use the scope data here.
-    """
-    cert   : str # client b64-der certificate
-    scopes : List[str] = [] # scopes the server will allow this client to gain
+    cert : str # client b64-der certificate
 
 class TrustedService(BaseModel):
     """
-    Defines a service provider.  To be used by potential
-    clients to determine how to connect with the service.
-    
-    The scopes attribute here defines the scopes
-    to be requested on accessing the server.
-    The actual granted scopes depend on the
-    server's configuration.
+    Defines a service provider.  Used by clients to determine
+    how to connect with the service.
+
+    Use the biscuit layer (`Baker`, `BiscuitAuthz`, `Critic`) for
+    authorisation — not this record.
     """
-    url    : str # server location
-    cert   : Optional[str] = None # server b64-der certificate (or CA)
-    scopes : List[str] = [] # scopes client should request when using this service
+    model_config = ConfigDict(extra='ignore')
+
+    url   : str # server location
+    cert  : Optional[str] = None # server b64-der certificate (or CA)
     auths : List[str] = [] # names of validators recognized by this service
 
 class LokiConfig(BaseModel):

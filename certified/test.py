@@ -18,6 +18,7 @@ def child_process(fn, *args, **kws):
            os.kill(child_pid, signal.SIGTERM)
     else: # child process
        fn( *args, **kws)
+       os._exit(0)
 
 @contextmanager
 def child_server(server, *args, **kws):

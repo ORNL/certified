@@ -77,7 +77,7 @@ class Blob:
 
     Args:
       data: the PEM-encoded data.
-      secret: either "public" or "secret" (setting file permissions for I/O)
+      is_secret: True for private-key material (writes with mode 0o600), False for public data (0o644).
     """
 
     def __init__(self, data: bytes, is_secret : bool) -> None:

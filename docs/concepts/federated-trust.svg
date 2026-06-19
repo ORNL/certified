@@ -1,0 +1,137 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="950" height="440" font-family="sans-serif" font-size="12">
+  <defs>
+    <marker id="ab" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#2E6BA8"/>
+    </marker>
+    <marker id="ag" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#3A8A3A"/>
+    </marker>
+    <marker id="agd" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#3A8A3A"/>
+    </marker>
+  </defs>
+
+  <!-- ── Panel 1 ── -->
+  <g transform="translate(5,5)">
+    <rect width="300" height="420" rx="8" fill="#F8F8F8" stroke="#BBBBBB" stroke-width="1.5"/>
+    <text x="150" y="28" text-anchor="middle" font-weight="bold" font-size="13">Panel 1 — Independent</text>
+
+    <!-- Org1 CA (blue) -->
+    <rect x="18" y="44" width="120" height="72" rx="5" fill="#D6EAF8" stroke="#2E6BA8" stroke-width="2"/>
+    <text x="78" y="70" text-anchor="middle" font-weight="bold" fill="#1A4A7A">Org1 CA</text>
+    <text x="78" y="88" text-anchor="middle" font-size="10" fill="#444">certified/</text>
+    <text x="78" y="104" text-anchor="middle" font-size="9" fill="#666">CA.key  CA.crt</text>
+
+    <!-- Org2 CA (green) -->
+    <rect x="162" y="44" width="120" height="72" rx="5" fill="#D5F5E3" stroke="#3A8A3A" stroke-width="2"/>
+    <text x="222" y="70" text-anchor="middle" font-weight="bold" fill="#1A5A1A">Org2 CA</text>
+    <text x="222" y="88" text-anchor="middle" font-size="10" fill="#444">certified/</text>
+    <text x="222" y="104" text-anchor="middle" font-size="9" fill="#666">CA.key  CA.crt</text>
+
+    <!-- Client1 (blue) -->
+    <rect x="18" y="230" width="120" height="62" rx="5" fill="#D6EAF8" stroke="#2E6BA8" stroke-width="2"/>
+    <text x="78" y="258" text-anchor="middle" font-weight="bold" fill="#1A4A7A">Client1</text>
+    <text x="78" y="276" text-anchor="middle" font-size="10" fill="#444">certified/</text>
+    <rect x="18" y="302" width="120" height="22" rx="3" fill="#FEF9E7" stroke="#D4AC0D" stroke-width="1"/>
+    <text x="78" y="317" text-anchor="middle" font-size="9" fill="#7D6608">id.key  id.crt</text>
+
+    <!-- Client2 (green) -->
+    <rect x="162" y="230" width="120" height="62" rx="5" fill="#D5F5E3" stroke="#3A8A3A" stroke-width="2"/>
+    <text x="222" y="258" text-anchor="middle" font-weight="bold" fill="#1A5A1A">Client2</text>
+    <text x="222" y="276" text-anchor="middle" font-size="10" fill="#444">certified/</text>
+    <rect x="162" y="302" width="120" height="22" rx="3" fill="#FEF9E7" stroke="#D4AC0D" stroke-width="1"/>
+    <text x="222" y="317" text-anchor="middle" font-size="9" fill="#7D6608">id.key  id.crt</text>
+
+    <text x="150" y="390" text-anchor="middle" font-size="10" fill="#999" font-style="italic">No shared trust — each party</text>
+    <text x="150" y="405" text-anchor="middle" font-size="10" fill="#999" font-style="italic">only trusts itself</text>
+  </g>
+
+  <!-- ── Panel 2 ── -->
+  <g transform="translate(325,5)">
+    <rect width="300" height="420" rx="8" fill="#F8F8F8" stroke="#BBBBBB" stroke-width="1.5"/>
+    <text x="150" y="28" text-anchor="middle" font-weight="bold" font-size="13">Panel 2 — Own-org signatures</text>
+
+    <!-- Org1 CA -->
+    <rect x="18" y="44" width="120" height="72" rx="5" fill="#D6EAF8" stroke="#2E6BA8" stroke-width="2"/>
+    <text x="78" y="70" text-anchor="middle" font-weight="bold" fill="#1A4A7A">Org1 CA</text>
+    <text x="78" y="88" text-anchor="middle" font-size="10" fill="#444">certified/</text>
+    <text x="78" y="104" text-anchor="middle" font-size="9" fill="#666">CA.key  CA.crt</text>
+
+    <!-- Org2 CA -->
+    <rect x="162" y="44" width="120" height="72" rx="5" fill="#D5F5E3" stroke="#3A8A3A" stroke-width="2"/>
+    <text x="222" y="70" text-anchor="middle" font-weight="bold" fill="#1A5A1A">Org2 CA</text>
+    <text x="222" y="88" text-anchor="middle" font-size="10" fill="#444">certified/</text>
+    <text x="222" y="104" text-anchor="middle" font-size="9" fill="#666">CA.key  CA.crt</text>
+
+    <!-- Sign arrows -->
+    <line x1="78" y1="116" x2="78" y2="228" stroke="#2E6BA8" stroke-width="2" marker-end="url(#ab)"/>
+    <text x="62" y="177" text-anchor="middle" font-size="9" fill="#2E6BA8">signs</text>
+    <line x1="222" y1="116" x2="222" y2="228" stroke="#3A8A3A" stroke-width="2" marker-end="url(#ag)"/>
+    <text x="238" y="177" text-anchor="middle" font-size="9" fill="#3A8A3A">signs</text>
+
+    <!-- Client1 -->
+    <rect x="18" y="230" width="120" height="62" rx="5" fill="#D6EAF8" stroke="#2E6BA8" stroke-width="2"/>
+    <text x="78" y="258" text-anchor="middle" font-weight="bold" fill="#1A4A7A">Client1</text>
+    <text x="78" y="276" text-anchor="middle" font-size="10" fill="#444">certified/</text>
+    <rect x="18" y="302" width="120" height="22" rx="3" fill="#D6EAF8" stroke="#2E6BA8" stroke-width="1"/>
+    <text x="78" y="317" text-anchor="middle" font-size="9" fill="#1A4A7A">id/Org1.crt</text>
+
+    <!-- Client2 -->
+    <rect x="162" y="230" width="120" height="62" rx="5" fill="#D5F5E3" stroke="#3A8A3A" stroke-width="2"/>
+    <text x="222" y="258" text-anchor="middle" font-weight="bold" fill="#1A5A1A">Client2</text>
+    <text x="222" y="276" text-anchor="middle" font-size="10" fill="#444">certified/</text>
+    <rect x="162" y="302" width="120" height="22" rx="3" fill="#D5F5E3" stroke="#3A8A3A" stroke-width="1"/>
+    <text x="222" y="317" text-anchor="middle" font-size="9" fill="#1A5A1A">id/Org2.crt</text>
+
+    <text x="150" y="390" text-anchor="middle" font-size="10" fill="#999" font-style="italic">Each client trusted by its own org;</text>
+    <text x="150" y="405" text-anchor="middle" font-size="10" fill="#999" font-style="italic">the two orgs are still isolated</text>
+  </g>
+
+  <!-- ── Panel 3 ── -->
+  <g transform="translate(645,5)">
+    <rect width="300" height="420" rx="8" fill="#F8F8F8" stroke="#BBBBBB" stroke-width="1.5"/>
+    <text x="150" y="28" text-anchor="middle" font-weight="bold" font-size="13">Panel 3 — Cross-org signature</text>
+
+    <!-- Org1 CA -->
+    <rect x="18" y="44" width="120" height="72" rx="5" fill="#D6EAF8" stroke="#2E6BA8" stroke-width="2"/>
+    <text x="78" y="70" text-anchor="middle" font-weight="bold" fill="#1A4A7A">Org1 CA</text>
+    <text x="78" y="88" text-anchor="middle" font-size="10" fill="#444">certified/</text>
+    <text x="78" y="104" text-anchor="middle" font-size="9" fill="#666">CA.key  CA.crt</text>
+
+    <!-- Org2 CA -->
+    <rect x="162" y="44" width="120" height="72" rx="5" fill="#D5F5E3" stroke="#3A8A3A" stroke-width="2"/>
+    <text x="222" y="70" text-anchor="middle" font-weight="bold" fill="#1A5A1A">Org2 CA</text>
+    <text x="222" y="88" text-anchor="middle" font-size="10" fill="#444">certified/</text>
+    <text x="222" y="104" text-anchor="middle" font-size="9" fill="#666">CA.key  CA.crt</text>
+
+    <!-- Org1 → Client1 (solid blue) -->
+    <line x1="78" y1="116" x2="78" y2="228" stroke="#2E6BA8" stroke-width="2" marker-end="url(#ab)"/>
+
+    <!-- Org2 → Client2 (solid green) -->
+    <line x1="222" y1="116" x2="222" y2="228" stroke="#3A8A3A" stroke-width="2" marker-end="url(#ag)"/>
+
+    <!-- Org2 → Client1 (dashed green, diagonal = cross-signing) -->
+    <line x1="210" y1="116" x2="132" y2="228" stroke="#3A8A3A" stroke-width="2" stroke-dasharray="6,4" marker-end="url(#agd)"/>
+    <text x="188" y="165" text-anchor="middle" font-size="9" fill="#3A8A3A" transform="rotate(-54,188,165)">cross-signs</text>
+
+    <!-- Client1 with TWO certs -->
+    <rect x="18" y="230" width="120" height="62" rx="5" fill="#D6EAF8" stroke="#2E6BA8" stroke-width="2"/>
+    <text x="78" y="258" text-anchor="middle" font-weight="bold" fill="#1A4A7A">Client1</text>
+    <text x="78" y="276" text-anchor="middle" font-size="10" fill="#444">certified/</text>
+    <rect x="18" y="302" width="57" height="22" rx="3" fill="#D6EAF8" stroke="#2E6BA8" stroke-width="1"/>
+    <text x="46" y="317" text-anchor="middle" font-size="8" fill="#1A4A7A">id/Org1.crt</text>
+    <rect x="81" y="302" width="57" height="22" rx="3" fill="#D5F5E3" stroke="#3A8A3A" stroke-width="1"/>
+    <text x="110" y="317" text-anchor="middle" font-size="8" fill="#1A5A1A">id/Org2.crt</text>
+
+    <!-- Client2 (unchanged — only own org) -->
+    <rect x="162" y="230" width="120" height="62" rx="5" fill="#D5F5E3" stroke="#3A8A3A" stroke-width="2"/>
+    <text x="222" y="258" text-anchor="middle" font-weight="bold" fill="#1A5A1A">Client2</text>
+    <text x="222" y="276" text-anchor="middle" font-size="10" fill="#444">certified/</text>
+    <rect x="162" y="302" width="120" height="22" rx="3" fill="#D5F5E3" stroke="#3A8A3A" stroke-width="1"/>
+    <text x="222" y="317" text-anchor="middle" font-size="9" fill="#1A5A1A">id/Org2.crt</text>
+
+    <text x="150" y="383" text-anchor="middle" font-size="10" fill="#999" font-style="italic">Client1 now trusted by both orgs.</text>
+    <text x="150" y="398" text-anchor="middle" font-size="10" fill="#999" font-style="italic">Client2 is not — asymmetry is</text>
+    <text x="150" y="413" text-anchor="middle" font-size="10" fill="#999" font-style="italic">deliberate and per-entity</text>
+  </g>
+</svg>

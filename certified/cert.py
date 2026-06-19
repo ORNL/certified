@@ -20,6 +20,9 @@ from .encode import (
     append_pseudonym,
     rfc4514name,
     get_is_ca,
+    cert_key_to_biscuit_alg,
+    cert_pubkey_to_biscuit_bytes,
+    KeyType,
 )
 from .ca import CA, LeafCert
 from .wrappers import ssl_context, configure_capath
@@ -170,7 +173,6 @@ class Certified:
     def add_client(self,
                    name: Pstr,
                    cert: x509.Certificate,
-                   scopes: List[str] = [],
                    overwrite: bool = False) -> None:
         """ Add the certificate to `known_clients`
             with the given name.
@@ -233,12 +235,17 @@ class Certified:
             raise FileExistsError(fname)
         fname.write_text(cert_to_pem(signed_cert))
 
-    def lookup_public_key(self, kid : int) -> bis.PublicKey:
+    def lookup_public_key(self, kid: int) -> bis.PublicKey:
         # FIXME: use key serial numbers
-        pubkey = self.signer().pubkey.public_bytes_raw()
-        #if kid is None:
-        #    return bis.PublicKey.from_bytes( pubkey )
-        return bis.PublicKey.from_bytes( pubkey, alg=bis.Algorithm.Ed25519 ) # type: ignore
+        pub = self.signer().pubkey
+        alg = cert_key_to_biscuit_alg(pub)
+        raw = cert_pubkey_to_biscuit_bytes(pub)
+        if alg is None or raw is None:
+            raise TypeError(
+                f"Key type {type(pub).__name__} is not supported "
+                "for biscuit verification (supported: ed25519, secp256r1)"
+            )
+        return bis.PublicKey.from_bytes(raw, alg=alg)  # type: ignore
 
     #def biscuit(self, token : str) -> bis.Biscuit:
     #    return bis.Biscuit.from_base64(token, self.lookup_public_key)
@@ -248,6 +255,7 @@ class Certified:
             name : x509.Name,
             san : x509.SubjectAlternativeName,
             certified_config : Optional[Pstr] = None,
+            key_type : KeyType = KeyType.ed25519,
             overwrite : bool = False,
            ) -> "Certified":
         """ Create a new CA and identity certificate
@@ -258,8 +266,8 @@ class Certified:
           certified_config: base directory to output the new identity
           overwrite: if True, any existing files will be deleted first
         """
-        ca    = CA.new(append_pseudonym(name, "Signing Certificate"))
-        ident = ca.leaf_cert(name, san)
+        ca    = CA.new(append_pseudonym(name, "Signing Certificate"), key_type=key_type)
+        ident = ca.leaf_cert(name, san, key_type=key_type)
 
         cfg = layout.config(certified_config, False)
         if overwrite: # remove existing config!
@@ -319,6 +327,10 @@ class Certified:
         """ Create an httpx.Client context
             that includes the current identity within
             its ssl context.
+
+            Use this for synchronous code. For async code see
+            [`AsyncClient`][certified.cert.Certified.AsyncClient] (httpx) or
+            [`ClientSession`][certified.cert.Certified.ClientSession] (aiohttp).
         """
         assert httpx is not None, "httpx is not available."
 
@@ -340,6 +352,49 @@ class Certified:
         with httpx.Client(base_url = new_base,
                           headers = headers,
                           verify = ssl_ctx) as client:
+            yield client
+
+    @asynccontextmanager
+    async def AsyncClient(self, base_url : str = "", headers : Dict[str,str] = {}):
+        """ Create an httpx.AsyncClient context
+            that includes the current identity within
+            its ssl context.
+
+            Use this for async code when you need an `httpx.AsyncClient` —
+            for example when integrating with frameworks such as A2A, LangChain,
+            or any library that accepts `httpx.AsyncClient` directly.
+
+            For aiohttp-based async code (e.g. existing tests or WebSocket
+            support) use [`ClientSession`][certified.cert.Certified.ClientSession]
+            instead.
+
+            Example:
+            ```python
+            cert = Certified()
+            async with cert.AsyncClient("https://my-api:8443") as http:
+                r = await http.get("/notes")
+                r.raise_for_status()
+                print(r.json())
+            ```
+        """
+        assert httpx is not None, "httpx is not available."
+
+        url = urlparse(base_url)
+        assert url.port is None \
+                or url.netloc == f"{url.hostname}:{url.port}", "URL's netloc must define only a hostname and port."
+
+        srv = self.lookup_server(url.hostname)
+        if srv:
+            url = replace_baseurl(url, srv.url)
+
+        new_base = urlunparse(url)
+        if srv:
+            _logger.debug("Replaced %s with %s", base_url, new_base)
+
+        ssl_ctx = self.ssl_context(True, srv)
+        async with httpx.AsyncClient(base_url = new_base,
+                                     headers = headers,
+                                     verify = ssl_ctx) as client:
             yield client
 
     def serve(self,

@@ -9,14 +9,13 @@ and consists of four separate parts:
 
 1. [Installation and CLI](cli.md)
 
-1. [Tutorials](tutorials.md)
+1. [Tutorials](tutorials/index.md)
 
-2. [How-To Guides](how-to-guides.md)
+2. [How-To Guides](howto/index.md)
 
-3. [Reference](reference.md)
-  - [Configuration / Keyfile Layout](keys.md)
+3. [Reference](reference/index.md)
 
-4. [Explanation](explanation.md)
+4. [Concept Guide](concepts/index.md)
 
 ## Acknowledgments
 

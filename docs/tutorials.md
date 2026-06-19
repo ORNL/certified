@@ -1,156 +1,184 @@
-<!--This part of the project documentation focuses on a
-**learning-oriented** approach. You'll learn how to
-get started with the code in this project.
+# Tutorials
 
-> **Note:** Expand this section by considering the
-> following points:
+These tutorials walk you through the three core workflows in `certified`.
+Each is self-contained; follow them in order or jump to the one you need.
+The [How-To Guides](howto/index.md) cover each step in more detail.
 
-- Help newcomers with getting started
-- Teach readers about your library by making them
-    write code
-- Inspire confidence through examples that work for
-    everyone, repeatably
-- Give readers an immediate sense of achievement
-- Show concrete examples, no abstractions
-- Provide the minimum necessary explanation
-- Avoid any distractions
--->
+---
 
-# Tutorial
+## Tutorial 1 — Setting up an identity
 
-## Writing a client
+**Scenario:** Alice Nguyen is a researcher at Oak Ridge National Laboratory.
+She needs a `certified` identity so she can authenticate to internal APIs
+and eventually connect with collaborators at other institutions.
 
-The aiohttp library provides a nice interface for
-writing an API client.
+### 1. Create your identity
 
-    import asyncio
-    import aiohttp
+```bash
+certified init 'Alice Nguyen' \
+    --email alice.nguyen@ornl.gov \
+    --config $HOME/etc/certified
+```
 
-    headers = { "user-agent": "my-app/0.0.1",
-                "Accept": "application/json" }
+This creates a config directory with a CA key, an identity cert, and
+self-trust entries so Alice can immediately call her own services.
+See [Create an identity](howto/init.md) for all available options.
 
-    async def main():
-        async with aiohttp.ClientSession(
-                    base_url="https://api.weather.gov",
-                    headers=headers) as session:
-            async with session.get("/points/28.3968,-80.6057") as resp:
-                assert resp.status == 200
-                print(await resp.json())
+### 2. Inspect what was created
 
-    asyncio.run(main())
+```bash
+ls $HOME/etc/certified/
+# CA.key  CA.crt  id.key  id.crt  known_servers/  known_clients/
+```
 
-This example queries the public
-[National Weather Service API](https://www.weather.gov/documentation/services-web-api) to get the weather forecast
-for Cape Canaveral, FL by specifying
-its latitude, longitude pair.
+Export the identity cert in base64-DER (for sharing with a signer):
 
-The headers here are extra pieces of information sent along
-with the request that are not part of the URL.
-Some APIs (for example google photos) expect access
-tokens to be passed in the headers.
-In this example, both header values are optional,
-since the server hasn't asked for this information specifically.
+```bash
+certified get-ident --config $HOME/etc/certified
+```
 
-The `base_url` forms the prefix for all requests
-using this client.  Our `get` call actually performs the
-equivalent of:
+### 3. Run a quick self-test
 
-    curl https://api.weather.gov/points/28.3968,-80.6057
+Start a minimal echo server using your new identity:
 
-By creating a client context object, we can avoid repeating
-the base URL and headers with every request.
+```bash
+certified serve --config $HOME/etc/certified examples.echo:app https://127.0.0.1:8443
+```
 
-More examples of using aiohttp client methods are provided
-in their [quick start guide](https://docs.aiohttp.org/en/stable/client_quickstart.html).
+Then call it from another terminal:
 
+```bash
+certified message --config $HOME/etc/certified https://127.0.0.1:8443/echo/hello
+```
 
-## Writing a server
+If the server responds, your certificate stack is working end-to-end.
 
-To write your own server, I recommend
-following the [FastAPI tutorial](https://fastapi.tiangolo.com/tutorial/first-steps/).  Here's an echo server:
+---
 
-    # examples/echo.py
+## Tutorial 2 — Connecting with another organization
 
-    from typing import Dict
-    from fastapi import FastAPI
+**Scenario:** Alice (ORNL) wants to call an API run by Bob Chen at NIST.
+Bob's API server already exists and is configured with his own `certified`
+identity.  Alice and Bob need to establish cross-org trust.
 
-    app = FastAPI()
+This is the `introduce` / `add-intro` workflow.
+See [Cross-org introduction](howto/introduce.md) and
+[Cross-chain Trust](concepts/cross_chain_trust.md) for the full picture.
 
-    @app.get("/echo/{value}")
-    async def echo(value : str) -> Dict[str, str]:
-        return {"message": value}
+### Step 1 — Alice exports her identity cert
 
-You can run this with:
+```bash
+# Alice's machine
+certified get-ident --config $HOME/etc/certified > alice_cert.b64
+# Send alice_cert.b64 to Bob out-of-band (email, Slack, etc.)
+```
 
-    uvicorn examples.echo:app
+### Step 2 — Bob verifies and introduces
 
-It runs by default on `http://127.0.0.1:8000`
-and you can access it with, for example:
+Bob checks (out-of-band) that the cert really belongs to Alice, then:
 
-    curl http://127.0.0.1:8000/echo/Hello%20World%21
+```bash
+# Bob's machine
+certified introduce alice_cert.b64 > intro.json
+```
 
-Note that it uses HTTP, [which is insecure](https://https.cio.gov/).
-Serving only to 127.0.0.1 means the outside world can't access
-it however.  So it is safe for the time being.
+Bob can optionally add the `"services"` field to `intro.json` so Alice's
+client is automatically configured for his API:
 
-In order to transition this server to production,
-we will need to
+```json
+{
+  "signed_cert": "...",
+  "ca_cert": "...",
+  "services": {
+    "nist-materials-api": "https://materials.nist.gov:8443"
+  }
+}
+```
 
-1. setup a server certificate so it can serve requests via HTTPS
+Bob sends `intro.json` back to Alice.
 
-2. grant clients certificates and/or tokens and setup the server
-   to validate those
+### Step 3 — Alice installs the introduction
 
+```bash
+# Alice's machine
+certified add-intro intro.json --config $HOME/etc/certified
+```
 
-## Creating a certificate with certified
+`add-intro` automatically:
 
-Creating a server certificate with certified is easy.
+- Saves the signed cert chain under `id/<Bob's-org-name>.crt`
+- Creates `known_servers/nist-materials-api.yaml` pre-populated with Bob's
+  CA cert and the correct auth name
 
-    certified init --org 'Test Org' --unit 'Software' \
-                --host 127.0.0.1 --host localhost \
-                --config my_id
+Alice can now call Bob's API without any manual RFC 4514 string handling:
 
-This creates both a signing and an identity certificate
-in a new directory named `my_id`.
-See [explanation](explanation.md) for a full explanation.
+```bash
+certified message --config $HOME/etc/certified \
+    https://materials.nist.gov:8443/datasets
+```
 
-## Running the server with Certified
+---
 
-    certified serve --config my_id examples.echo:app https://127.0.0.1:8000
+## Tutorial 3 — Running an mTLS API server
 
-If you access this server from your web browser,
-you will get 2 connection errors.  First, your
-browser will not trust the server.  Second, the server
-will not trust your browser.
+**Scenario:** Alice wants to expose her own API at ORNL so that trusted
+collaborators (like Bob) can call it.
 
+### 1. Write a FastAPI application
 
-## Running the client with Certified
+```python
+# ornl_api/server.py
+from fastapi import FastAPI
+from certified.fast import ClientName
 
-To access this server, you can use the command-line message utility
-as you would for curl,
+app = FastAPI()
 
-    message --config my_id https://127.0.0.1:8000/echo/hello
+@app.get("/hello")
+async def hello(name: ClientName):
+    return {"message": f"Hello, {name}!"}
+```
 
-For more involved use cases, Certified provides a way to create
-an aiohttp ClientSession.  This session is correctly wrapped
-with the client ID and root certificates configured within your
-configuration directory.
+`ClientName` is a FastAPI dependency that extracts the caller's common name
+from the mTLS peer certificate — no manual cert parsing needed.
+See the [FastAPI integration reference](reference/fast.md) for more dependencies.
 
-    import asyncio
-    from certified import Certified
+### 2. Add Alice's service identity
 
-    cert = Certified("my_id")
+If Alice's personal identity is already set up (Tutorial 1), she can
+create a separate service identity for her API server:
 
-    headers = { "user-agent": "my-app/0.0.1",
-                "Accept": "application/json" }
+```bash
+certified init \
+    --org 'Oak Ridge National Laboratory' --unit 'Materials Science' \
+    --domain materials.ornl.gov \
+    --host materials.ornl.gov --host localhost \
+    --email ops@ornl.gov \
+    --config $VIRTUAL_ENV/etc/certified
+```
 
-    async def main():
-        async with cert.ClientSession(
-                            base_url="https://127.0.0.1:8000",
-                        headers=headers
-                        ) as cli:
-            resp = await cli.get("/echo/Hello world!")
-            assert resp.status_code == 200
-            print( await resp.json() )
+### 3. Trust Bob's certificate
 
-    asyncio.run(main())
+For Bob to call Alice's API, his CA must appear in `known_clients/`:
+
+```bash
+# Bob exports his CA cert:  certified get-signer > bob_ca.json
+# Alice installs it:
+certified add-client bob-nist bob_ca.json \
+    --config $VIRTUAL_ENV/etc/certified
+```
+
+See [Trust a client](howto/add-client.md) for details.
+
+### 4. Start the server
+
+```bash
+certified serve \
+    --config $VIRTUAL_ENV/etc/certified \
+    ornl_api.server:app \
+    https://0.0.0.0:8443
+```
+
+Bob can now call Alice's API using the cross-org identity he issued her in
+Tutorial 2, and the `ClientName` dependency will greet him by name.
+
+For structured JSON logging, see [Rich JSON logging](howto/logging.md).
